@@ -1,0 +1,10 @@
+<div class="bookmenu {{cls}}">
+  <button type="button" class="btn btn-red" data-act="bm" aria-haspopup="true" aria-expanded="false">{{label}} <span aria-hidden="true">&#9662;</span></button>
+  <ul class="bm-list" role="menu" hidden>
+    {{#each booking}}
+    <li role="none">
+      <a role="menuitem" href="{{href}}"><strong>{{label}}</strong><small>{{price}} &middot; {{blurb}}</small></a>
+    </li>
+    {{/each}}
+  </ul>
+</div>

@@ -1,0 +1,64 @@
+<section class="phead">
+  <div class="wrap">
+    <p class="kicker">Referral partner portal</p>
+    <h1>Hello, {{partner.name}}</h1>
+    <p class="lede">Here are the people you have referred to UGEC Canada and how far each one has got.</p>
+  </div>
+</section>
+
+<section class="sec tight">
+  <div class="wrap">
+    {{#unless partner.active}}
+    <div class="note"><p>Your referral link is paused, so new people are not being linked to you at the moment. Your referrals so far are still shown below. Contact UGEC Canada if you have questions.</p></div>
+    {{/unless}}
+
+    <div class="share">
+      <div>
+        <h2>Your referral link</h2>
+        <p class="small">Send this link to people who are interested. When they contact UGEC Canada within 30 days of opening it, they are linked to you. They can also choose your name in "Who referred you?"</p>
+      </div>
+      <div class="share-row">
+        <input value="{{link}}" readonly aria-label="Your referral link" data-select>
+        <button class="btn btn-line" type="button" data-act="copy" data-v="{{link}}">Copy link</button>
+        <a class="btn btn-wa" href="{{waShare}}" target="_blank" rel="noopener">Share on WhatsApp</a>
+      </div>
+    </div>
+
+    <div class="pstats">
+      <div><b>{{total}}</b><span>people referred</span></div>
+      <div><b>{{inProgress}}</b><span>in progress</span></div>
+      <div><b>{{enrolled}}</b><span>enrolled</span></div>
+      {{#if hasCommission}}
+      <div><b>{{paid}}</b><span>commission paid</span></div>
+      <div><b>{{owed}}</b><span>approved, not yet paid</span></div>
+      <div><b>{{pending}}</b><span>pending review</span></div>
+      {{/if}}
+    </div>
+
+    <h2 class="mt">Your referrals</h2>
+    {{#each refs}}
+    <article class="ref{{#if closed}} closed{{/if}}">
+      <div class="ref-top">
+        <div>
+          <h3>{{client}}</h3>
+          <p class="small">{{dateLabel}}{{#if asked}} &middot; {{asked}}{{/if}}</p>
+        </div>
+        <div class="ref-tags">
+          <span class="tag">{{stage}}</span>
+          {{#if commissionLabel}}<span class="tag {{commissionClass}}">{{commissionLabel}}{{#if amountLabel}}: {{amountLabel}}{{/if}}</span>{{/if}}
+        </div>
+      </div>
+      {{#unless closed}}
+      <ol class="progress" aria-label="Progress: {{stage}}">
+        {{#each steps}}<li class="{{#if done}}done{{/if}}{{#if current}} current{{/if}}">{{label}}</li>{{/each}}
+      </ol>
+      {{/unless}}
+    </article>
+    {{else}}
+    <div class="empty">No referrals yet. Share your link above, and the people you refer will appear here.</div>
+    {{/each}}
+
+    <p class="small mt">Commission amounts are in CAD and are confirmed by UGEC Canada before they are paid. Questions? <a href="/contact">Contact us</a>.
+      Keep this page's address private: anyone who has it can see your referrals.</p>
+  </div>
+</section>

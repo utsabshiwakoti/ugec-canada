@@ -1,0 +1,44 @@
+{{> components/page-head title="About UGEC Canada" lede=site.tagline}}
+
+<section class="sec tight">
+  <div class="wrap">
+    <div class="about-intro{{#if site.aboutImage}} has-img{{/if}}">
+      <div>
+        <p>UGEC Canada is a Canadian education consultancy based in Halifax, Nova Scotia. We help students and individuals explore education and career opportunities across Canada.</p>
+        <p>UGEC works with educational institutions and training providers in different Canadian provinces. Program availability, tuition, admission requirements and intakes can change and should be confirmed with the institution.</p>
+      </div>
+      {{#if site.aboutImage}}<img class="about-img" src="{{site.aboutImage}}" alt="UGEC Canada">{{/if}}
+    </div>
+
+    <h2 class="mt">What we do</h2>
+    <ul class="ruled">
+      <li>Educational consultation</li>
+      <li>Program and college selection</li>
+      <li>Admission and application support</li>
+      <li>Document checklist and organization</li>
+      <li>Application follow-up</li>
+      <li>Student and college communication support</li>
+      <li>Career-focused program guidance</li>
+      <li>Skilled-trades program exploration</li>
+      <li>Support for students already in Canada</li>
+      <li>Referral to authorized immigration professionals</li>
+    </ul>
+
+    <h2 class="mt">Meet our team</h2>
+    <div class="team">
+      {{#each team}}
+      <div class="person">
+        {{#if photo}}
+        <div class="ava" style="background-image:url('{{photo}}')" aria-hidden="true"></div>
+        {{else}}
+        <div class="ava" aria-hidden="true">{{initials}}</div>
+        {{/if}}
+        <h3>{{name}}</h3>
+        <p>{{role}}</p>
+      </div>
+      {{/each}}
+    </div>
+  </div>
+</section>
+
+{{> components/cta-band}}

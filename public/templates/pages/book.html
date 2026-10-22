@@ -1,0 +1,71 @@
+{{> components/page-head title="Book a consultation" lede="Choose the type of consultation. The form changes to match."}}
+
+<section class="sec tight">
+  <div class="wrap">
+    <div class="fg booksel">
+      <label for="bookType">What type of consultation?</label>
+      <select id="bookType">
+        {{#each types}}<option value="{{key}}"{{#if selected}} selected{{/if}}>{{label}} ({{price}})</option>{{/each}}
+      </select>
+    </div>
+
+    <div class="cols two">
+      <div>
+        {{#if is.educational}}
+        <h2>We will help you with</h2>
+        <ul class="ruled nocol">
+          <li>Program selection</li>
+          <li>College and institution options</li>
+          <li>Province selection</li>
+          <li>Admission requirements</li>
+          <li>Tuition and budgeting</li>
+          <li>Intake planning</li>
+          <li>Application document checklist</li>
+          <li>Career-focused programs</li>
+        </ul>
+        <p class="mt-s small">Not in Canada yet? Put your country in the location field and we will tell you what applies.</p>
+        {{/if}}
+
+        {{#if is.already}}
+        <h2>For people already in Canada</h2>
+        <p>Tell us your current status and goals, and we will suggest next steps. Have these on hand:</p>
+        <ul class="ruled nocol">
+          <li>Your current permit or status, and its expiry date</li>
+          <li>Your most recent credential or transcripts</li>
+          <li>Resume or work history</li>
+          <li>The province and budget you have in mind</li>
+        </ul>
+        {{/if}}
+
+        {{#if is.trades}}
+        <h2>Skilled trades</h2>
+        <p>Gas technician (G3 / G2), HVAC, plumbing, carpentry, welding and other trades programs are available in Ontario. Details are coming soon. Tell us which trade interests you and we will contact you when they are confirmed.</p>
+        {{/if}}
+
+        {{#if is.immigration}}
+        <h2>Who gives the advice</h2>
+        <p>Regulated immigration advice is provided by <strong>{{site.rcic.name}}</strong>, {{site.rcic.title}}{{#if site.rcic.licence}} (licence no. {{site.rcic.licence}}){{/if}}. UGEC staff who are not licensed do not give regulated immigration advice.</p>
+        <h3>What the consultation covers</h3>
+        <ul class="ruled nocol">
+          <li>A review of your status, education and work history</li>
+          <li>An explanation of options relevant to your main question</li>
+          <li>Suggested next steps and where to find official sources</li>
+        </ul>
+        <div class="note"><p><strong>No guarantees.</strong> A consultation does not guarantee a visa, work permit, permanent residence or any other result. Decisions are made by the Government of Canada.</p></div>
+        <ol class="steps">
+          <li>Book and pay for your consultation</li>
+          <li>Complete the intake form so your consultant can prepare</li>
+        </ol>
+        <a class="btn btn-red mt-s" href="{{site.stripeUrl}}" target="_blank" rel="noopener">Step 1: Book and pay</a>
+        <p class="small mt-s">Booking and payment open in a secure Stripe page.</p>
+        {{/if}}
+      </div>
+
+      <div class="panel">
+        <h2>{{#if is.immigration}}Step 2: Intake form{{else}}Your details{{/if}}</h2>
+        <p class="small">Fields marked * are required.</p>
+        {{#with form}}{{> components/form}}{{/with}}
+      </div>
+    </div>
+  </div>
+</section>

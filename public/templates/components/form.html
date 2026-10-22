@@ -1,0 +1,14 @@
+{{#if unavailable}}
+<div class="note">
+  <p>This form is temporarily unavailable. <a href="{{waQuestion}}" target="_blank" rel="noopener">Message us on WhatsApp</a> or email <a href="mailto:{{site.email}}">{{site.email}}</a>.</p>
+</div>
+{{else}}
+<form class="f" data-form="{{type}}" novalidate>
+  {{#each fields}}{{> components/field}}{{/each}}
+  {{#with referral}}{{> components/referral}}{{/with}}
+  <div class="hp" aria-hidden="true"><label>Leave this empty<input name="hp" tabindex="-1" autocomplete="off"></label></div>
+  <p class="err" role="alert" hidden></p>
+  <button class="btn btn-red" type="submit">{{submitLabel}}</button>
+  <p class="small consent">By sending this form you agree that UGEC Canada may contact you about your inquiry and handle your details as described in our <a href="/legal/privacy">Privacy Policy</a>.</p>
+</form>
+{{/if}}

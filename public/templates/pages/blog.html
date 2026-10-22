@@ -1,0 +1,16 @@
+{{> components/page-head title="Blog and updates" lede="Guides on studying in Canada, program intakes, skilled trades and education planning."}}
+
+<section class="sec tight">
+  <div class="wrap">
+    <div class="note"><p>Immigration-related posts show the date of the update and link to official government sources, because policies change.</p></div>
+    {{#each posts}}
+    <article class="post">
+      <time datetime="{{published_at}}">{{date}}</time> &middot; {{category}}
+      <h3><a href="/blog/{{slug}}">{{title}}</a></h3>
+      <p>{{summary}}</p>
+    </article>
+    {{else}}
+    <div class="empty">No posts yet.</div>
+    {{/each}}
+  </div>
+</section>

@@ -1,0 +1,20 @@
+{{> components/page-head title="Contact us" lede="Questions about programs, admissions or next steps? Send us a message or chat on WhatsApp."}}
+
+<section class="sec tight">
+  <div class="wrap cols two">
+    <div>
+      <h2>UGEC Canada</h2>
+      <p>{{site.location}}</p>
+      <p>
+        Email: <a href="mailto:{{site.email}}">{{site.email}}</a><br>
+        Phone / WhatsApp: <a href="tel:+{{site.phoneRaw}}">{{site.phoneDisplay}}</a>
+      </p>
+      <a class="btn btn-wa" href="{{waQuestion}}" target="_blank" rel="noopener">WhatsApp UGEC</a>
+    </div>
+    <div class="panel">
+      <h2>Send a message</h2>
+      <p class="small">Fields marked * are required.</p>
+      {{#with form}}{{> components/form}}{{/with}}
+    </div>
+  </div>
+</section>

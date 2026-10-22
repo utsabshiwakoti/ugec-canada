@@ -1,0 +1,33 @@
+<div class="wrap">
+  <div class="fgrid">
+    <div class="fbrand">
+      {{#if site.logoDark}}
+        {{> components/brand logo=site.logoDark height=site.logoHeight}}
+      {{else}}
+        {{> components/brand logo=site.logo badge=site.logo height=site.logoHeight}}
+      {{/if}}
+      <p>Education and career guidance for students and individuals exploring opportunities in Canada.</p>
+      <p>
+        {{site.location}}<br>
+        <a href="mailto:{{site.email}}">{{site.email}}</a><br>
+        <a href="tel:+{{site.phoneRaw}}">{{site.phoneDisplay}}</a>
+      </p>
+    </div>
+    <div>
+      <h3>Company</h3>
+      <ul>
+        {{#each company}}<li><a href="{{href}}">{{label}}</a></li>{{/each}}
+      </ul>
+    </div>
+    <div>
+      <h3>Legal</h3>
+      <ul>
+        {{#each legal}}<li><a href="{{href}}">{{label}}</a></li>{{/each}}
+      </ul>
+    </div>
+  </div>
+  <div class="fbot">
+    <p class="disc">{{disclaimer}}</p>
+    <p class="copy">&copy; {{year}} UGEC Canada. All rights reserved.</p>
+  </div>
+</div>

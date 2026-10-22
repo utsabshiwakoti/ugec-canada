@@ -1,0 +1,15 @@
+<div class="fg">
+  <label for="{{id}}">{{label}}{{#if required}} <i aria-hidden="true">*</i>{{/if}}</label>
+  {{#if isTextarea}}
+  <textarea id="{{id}}" name="{{name}}"{{#if required}} required{{/if}}>{{value}}</textarea>
+  {{/if}}
+  {{#if isSelect}}
+  <select id="{{id}}" name="{{name}}"{{#if required}} required{{/if}}>
+    {{#if emptyOption}}<option value="">Select</option>{{/if}}
+    {{#each options}}<option{{#if selected}} selected{{/if}}>{{text}}</option>{{/each}}
+  </select>
+  {{/if}}
+  {{#if isInput}}
+  <input id="{{id}}" name="{{name}}" type="{{type}}" value="{{value}}"{{#if required}} required{{/if}}{{#if autocomplete}} autocomplete="{{autocomplete}}"{{/if}}{{#if inputmode}} inputmode="{{inputmode}}"{{/if}}>
+  {{/if}}
+</div>

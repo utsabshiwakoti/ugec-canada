@@ -1,0 +1,12 @@
+<div class="fg">
+  <label for="f_referral_partner">Who referred you? (optional)</label>
+  <select id="f_referral_partner" name="referral_partner">
+    <option value="">No one, I found UGEC myself</option>
+    {{#each partners}}<option value="{{code}}"{{#if selected}} selected{{/if}}>{{name}}</option>{{/each}}
+    <option value="__other"{{#if otherSelected}} selected{{/if}}>Someone else</option>
+  </select>
+</div>
+<div class="fg ref-other"{{#unless otherSelected}} hidden{{/unless}}>
+  <label for="f_referral_other">Their name</label>
+  <input id="f_referral_other" name="referral_other" maxlength="200" value="{{otherValue}}">
+</div>

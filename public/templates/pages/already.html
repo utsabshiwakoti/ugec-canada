@@ -1,0 +1,51 @@
+{{> components/page-head title="Already in Canada? Explore Your Next Education or Career Step." lede="Compare career-focused programs by province, category and cost. Planning to come to Canada instead? Choose “Educational consultation” when you book and tell us where you are now."}}
+
+<section class="sec tight">
+  <div class="wrap">
+    <div class="toolbar">
+      <div><b>Province</b>{{> components/chips items=provinces act="sprov"}}</div>
+      <div><b>Category</b>{{> components/chips items=categories act="scat"}}</div>
+      <div><b>View</b>{{> components/chips items=views act="view"}}</div>
+    </div>
+
+    {{#if programs}}
+      {{#if tableView}}
+        {{> components/program-table}}
+      {{else}}
+        <div class="grid">
+          {{#each programs}}{{> components/program-card}}{{/each}}
+        </div>
+      {{/if}}
+    {{else}}
+      <div class="empty">No programs match these filters. Clear a filter or message UGEC for upcoming additions.</div>
+    {{/if}}
+  </div>
+</section>
+
+<section class="sec alt">
+  <div class="wrap">
+    <p class="kicker">Where are you now?</p>
+    <h2>Your situation shapes your options</h2>
+    <div class="grid">
+      <div class="why">
+        <h3>Recently graduated</h3>
+        <p>Add a career-focused credential or move into a new field.</p>
+      </div>
+      <div class="why">
+        <h3>Currently studying</h3>
+        <p>Plan your next program, or compare options in another province or college.</p>
+      </div>
+      <div class="why">
+        <h3>Working in Canada</h3>
+        <p>Look for live online classes, recordings or evening batches. Each program lists its format.</p>
+      </div>
+      <div class="why">
+        <h3>Permanent resident or citizen</h3>
+        <p>Explore career-focused programs and tuition options.</p>
+      </div>
+    </div>
+    <p class="mt-s">Your status and permits can affect which programs you can take. Share them when you book, and where regulated immigration advice is needed we connect you with an authorized professional.</p>
+  </div>
+</section>
+
+{{> components/cta-band}}

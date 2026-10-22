@@ -1,0 +1,11 @@
+<section class="sec">
+  <div class="wrap prose">
+    <p class="crumb"><a href="/blog">&larr; All posts</a></p>
+    <p class="kicker">{{category}}</p>
+    <h1>{{title}}</h1>
+    <p class="meta"><time datetime="{{published_at}}">Updated {{date}}</time></p>
+    {{#each paragraphs}}<p>{{this}}</p>{{/each}}
+  </div>
+</section>
+
+{{> components/cta-band}}

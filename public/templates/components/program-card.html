@@ -1,0 +1,12 @@
+<article class="pc" data-cat="{{category}}">
+  <div class="prov">{{province}} &middot; {{category}}</div>
+  <h3><a href="/programs/{{slug}}">{{name}}</a></h3>
+  <dl>
+    {{#each rows}}<dt>{{label}}</dt><dd>{{value}}</dd>{{/each}}
+  </dl>
+  {{#if guarantee}}<p class="small">{{guarantee}}</p>{{/if}}
+  <div class="btns">
+    <a class="btn btn-line sm" href="/programs/{{slug}}">Details</a>
+    <a class="btn btn-red sm" href="{{bookHref}}">Book consultation</a>
+  </div>
+</article>

@@ -1,0 +1,19 @@
+<div class="tablewrap">
+  <table>
+    <thead>
+      <tr><th>Program</th><th>Province</th><th>Duration</th><th>Fees</th><th>Placement / delivery</th><th>Pathways</th></tr>
+    </thead>
+    <tbody>
+      {{#each programs}}
+      <tr>
+        <td><a href="/programs/{{slug}}"><strong>{{name}}</strong></a></td>
+        <td>{{province}}</td>
+        <td>{{table.duration}}</td>
+        <td>{{table.fees}}</td>
+        <td>{{table.placement}}</td>
+        <td>{{table.pathways}}</td>
+      </tr>
+      {{/each}}
+    </tbody>
+  </table>
+</div>
