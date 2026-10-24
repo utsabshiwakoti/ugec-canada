@@ -65,10 +65,16 @@ const CODE = /\.(?:js|mjs|css|html|json)$/i;
 app.use(express.static(PUBLIC, { index: false, maxAge: PROD ? '1h' : 0,
   setHeaders: (res, file) => { if (CODE.test(file)) res.set('Cache-Control', 'no-cache'); } }));
 app.use('/uploads', express.static(require('./uploads').DIR, { index: false, maxAge: PROD ? '30d' : 0, immutable: PROD }));
-app.get(['/admin', '/admin/'], (req, res) => res.set('Cache-Control', 'no-cache').sendFile(path.join(PUBLIC, 'admin', 'index.html')));
+const VERSION = Date.now().toString(36);
+const versioned = (html) => html.replace(/(\/(?:admin\/admin\.js|admin\/admin\.css|css\/site\.css|js\/main\.js))"/g, `$1?v=${VERSION}"`);
+let adminPage = null;
+app.get(['/admin', '/admin/'], (req, res) => {
+  const html = PROD ? (adminPage ||= versioned(fs.readFileSync(path.join(PUBLIC, 'admin', 'index.html'), 'utf8'))) : versioned(fs.readFileSync(path.join(PUBLIC, 'admin', 'index.html'), 'utf8'));
+  res.set('Cache-Control', 'no-cache').type('html').send(html);
+});
 
 const attr = (s) => String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
-const template = () => fs.readFileSync(path.join(PUBLIC, 'index.html'), 'utf8');
+const template = () => versioned(fs.readFileSync(path.join(PUBLIC, 'index.html'), 'utf8'));
 let cached = null;
 app.get('*', async (req, res) => {
   if (/\.[a-z0-9]+$/i.test(req.path)) return res.status(404).send('Not found');
@@ -86,6 +92,7 @@ app.get('*', async (req, res) => {
   }
   const tpl = PROD ? (cached ||= template()) : template();
   const out = tpl.replace(/<!--(SEO|SSR|APP|BANNER|BRAND|NAV|HBOOK|ABAR|FOOT|WAF)-->/g, (m, k) => parts[k]);
+  if (!res.get('Cache-Control')) res.set('Cache-Control', 'no-cache');
   res.status(known ? 200 : 404).type('html').send(out);
 });
 
