@@ -1,6 +1,9 @@
 <section class="phead">
   <div class="wrap">
-    <p class="kicker">Referral partner portal</p>
+    <div class="portal-bar">
+      <p class="kicker">Referral partner portal</p>
+      <p class="small">Signed in as {{partner.email}} <button class="linkbtn" type="button" data-act="portal-logout">Sign out</button></p>
+    </div>
     <h1>Hello, {{partner.name}}</h1>
     <p class="lede">Here are the people you have referred to UGEC Canada and how far each one has got.</p>
   </div>
@@ -58,7 +61,17 @@
     <div class="empty">No referrals yet. Share your link above, and the people you refer will appear here.</div>
     {{/each}}
 
-    <p class="small mt">Commission amounts are in CAD and are confirmed by UGEC Canada before they are paid. Questions? <a href="/contact">Contact us</a>.
-      Keep this page's address private: anyone who has it can see your referrals.</p>
+    <p class="small mt">Commission amounts are in CAD and are confirmed by UGEC Canada before they are paid. Questions? <a href="/contact">Contact us</a>.</p>
+
+    <details class="forgot mt">
+      <summary>Change your password</summary>
+      <form class="f" data-portal-password novalidate>
+        <input type="email" name="username" value="{{partner.email}}" autocomplete="username" hidden>
+        <div class="fg"><label for="f_pc_current">Current password</label><input id="f_pc_current" name="current" type="password" autocomplete="current-password" required></div>
+        <div class="fg"><label for="f_pc_next">New password (at least 10 characters)</label><input id="f_pc_next" name="next" type="password" autocomplete="new-password" minlength="10" required></div>
+        <p class="err" role="alert" hidden></p>
+        <button class="btn btn-line" type="submit">Change password</button>
+      </form>
+    </details>
   </div>
 </section>

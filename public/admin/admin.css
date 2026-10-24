@@ -80,3 +80,6 @@ button.b.line.danger{color:var(--red);border-color:#E9B6B1}
 .img-prev.wide img{object-fit:contain}
 .img-field .hint{margin-top:8px}
 .thumb{display:block;width:36px;height:36px;border-radius:50%;object-fit:cover;background:var(--ice);border:1px solid var(--line)}
+
+.card.invite{border-color:#9FD3B4;background:#F2FBF5}
+.card.invite input{font-size:.9rem}

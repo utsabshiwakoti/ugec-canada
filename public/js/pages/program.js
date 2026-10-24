@@ -17,7 +17,7 @@ export function programPage(p) {
   if (p.notes) details.push(['Note', p.notes]);
   return t('pages/program', {
     name: p.name, province: p.province, category: p.category, comingSoon: !!p.coming_soon,
-    bookHref: bookHref(p.category === 'Skilled trades' ? 'trades' : 'educational', p.slug),
+    bookHref: bookHref('educational', p.slug),
     waHref: WA(`Hi UGEC, I have a question about ${p.name} (${p.province}).`),
     details: details.map(([label, value]) => ({ label, value: value || '' })),
   });

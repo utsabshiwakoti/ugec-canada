@@ -12,8 +12,11 @@
     <div class="cols two">
       <div>
         {{#if is.educational}}
-        <h2>We will help you with</h2>
+        <h2>Free educational consultation</h2>
+        <p>Talk to us about PR-leading courses and your study options. We will help you with:</p>
         <ul class="ruled nocol">
+          <li>PR-leading courses</li>
+          <li>Study permit pathways (PGWP, LMIA or SOWP to study permit)</li>
           <li>Program selection</li>
           <li>College and institution options</li>
           <li>Province selection</li>
@@ -26,25 +29,9 @@
         <p class="mt-s small">Not in Canada yet? Put your country in the location field and we will tell you what applies.</p>
         {{/if}}
 
-        {{#if is.already}}
-        <h2>For people already in Canada</h2>
-        <p>Tell us your current status and goals, and we will suggest next steps. Have these on hand:</p>
-        <ul class="ruled nocol">
-          <li>Your current permit or status, and its expiry date</li>
-          <li>Your most recent credential or transcripts</li>
-          <li>Resume or work history</li>
-          <li>The province and budget you have in mind</li>
-        </ul>
-        {{/if}}
-
-        {{#if is.trades}}
-        <h2>Skilled trades</h2>
-        <p>Gas technician (G3 / G2), HVAC, plumbing, carpentry, welding and other trades programs are available in Ontario. Details are coming soon. Tell us which trade interests you and we will contact you when they are confirmed.</p>
-        {{/if}}
-
         {{#if is.immigration}}
         <h2>Who gives the advice</h2>
-        <p>Regulated immigration advice is provided by <strong>{{site.rcic.name}}</strong>, {{site.rcic.title}}{{#if site.rcic.licence}} (licence no. {{site.rcic.licence}}){{/if}}. UGEC staff who are not licensed do not give regulated immigration advice.</p>
+        <p>Our immigration assistance is provided with <strong>{{site.rcic.name}}</strong>, {{site.rcic.title}}{{#if site.rcic.licence}} (licence no. {{site.rcic.licence}}){{/if}}. UGEC staff who are not licensed do not give regulated immigration advice.</p>
         <h3>What the consultation covers</h3>
         <ul class="ruled nocol">
           <li>A review of your status, education and work history</li>

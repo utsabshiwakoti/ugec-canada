@@ -7,6 +7,8 @@ const money = (n) => '$' + n.toLocaleString('en-CA', { minimumFractionDigits: 2,
 
 export const portalLogin = (notice = '') => t('pages/portal-login', { notice });
 
+export const setPasswordPage = (code, info) => t('pages/set-password', { code, ...info });
+
 export function portalPage(d) {
   const link = `${globals.origin}/?ref=${encodeURIComponent(d.partner.code)}`;
   const refs = d.referrals.map((r) => {

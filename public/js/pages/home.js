@@ -10,7 +10,7 @@ export function home() {
     provinceCount: uniq(S.programs, 'province').length,
     categories: uniq(S.programs, 'category').map((name) => {
       const n = S.programs.filter((p) => p.category === name).length;
-      return { name, letter: name[0], info: info[name] || '', countLabel: `${n} program${n === 1 ? '' : 's'}`, href: `/already-in-canada?cat=${encodeURIComponent(name)}` };
+      return { name, letter: name[0], info: info[name] || '', countLabel: `${n} program${n === 1 ? '' : 's'}`, href: `/pr-leading-courses?cat=${encodeURIComponent(name)}` };
     }),
     posts: (S.posts || []).slice(0, 3).map((p) => ({ ...p, date: fmtDate(p.published_at) })),
     faqClass: stories ? '' : 'alt',

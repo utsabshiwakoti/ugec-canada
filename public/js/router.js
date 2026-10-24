@@ -18,7 +18,8 @@ export async function render(keepScroll, hydrate = false) {
     let loaded = null;
     if (need === 'posts') S.posts = S.posts || await api('/api/posts').catch(() => []);
     else if (need && need.post) loaded = await api('/api/posts/' + encodeURIComponent(need.post)).catch(() => null);
-    else if (need && need.portal) loaded = await api('/api/portal/' + encodeURIComponent(need.portal)).catch(() => null);
+    else if (need && need.portal) loaded = await api('/api/portal/me').catch(() => null); // null: not signed in
+    else if (need && need.setPassword) loaded = await api('/api/portal/set-password/' + encodeURIComponent(need.setPassword)).catch(() => null);
     page = pageFor(path, url.searchParams, loaded);
   } catch (e) {
     console.error(e);

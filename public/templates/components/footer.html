@@ -2,9 +2,9 @@
   <div class="fgrid">
     <div class="fbrand">
       {{#if site.logoDark}}
-        {{> components/brand logo=site.logoDark height=site.logoHeight}}
+        {{> components/brand logo=site.logoDark height=site.logoHeight dark=site.logoDark}}
       {{else}}
-        {{> components/brand logo=site.logo badge=site.logo height=site.logoHeight}}
+        {{> components/brand logo=site.logo badge=site.logo height=site.logoHeight dark=""}}
       {{/if}}
       <p>Education and career guidance for students and individuals exploring opportunities in Canada.</p>
       <p>
@@ -12,6 +12,7 @@
         <a href="mailto:{{site.email}}">{{site.email}}</a><br>
         <a href="tel:+{{site.phoneRaw}}">{{site.phoneDisplay}}</a>
       </p>
+      {{#if site.social}}<p class="social">{{#each site.social}}<a href="{{href}}" target="_blank" rel="noopener">{{label}}</a>{{/each}}</p>{{/if}}
     </div>
     <div>
       <h3>Company</h3>

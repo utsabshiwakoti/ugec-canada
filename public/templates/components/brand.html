@@ -1,6 +1,9 @@
 <a class="brand{{#if badge}} badge{{/if}}" href="/" aria-label="UGEC Canada home"{{#if height}} style="--logo-h:{{height}}px"{{/if}}>
   {{#if logo}}
-  <img class="brand-logo" src="{{logo}}" alt="">
+  <picture>
+    {{#if dark}}<source srcset="{{dark}}" media="(prefers-color-scheme: dark)">{{/if}}
+    <img class="brand-logo{{#unless dark}}{{#unless badge}} needs-light{{/unless}}{{/unless}}" src="{{logo}}" alt="">
+  </picture>
   {{else}}
   <span class="mark" aria-hidden="true"><i></i><b></b><i></i></span><span>UGEC<small>Canada</small></span>
   {{/if}}

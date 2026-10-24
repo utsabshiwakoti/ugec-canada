@@ -1,9 +1,10 @@
 const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
-const { dataDir } = require('./db');
+const db = require('./db');
 
-const DIR = path.join(dataDir, 'uploads');
+const DIR = process.env.UPLOAD_DIR
+  || (db.dialect === 'mysql' ? path.join(__dirname, '..', 'public', 'assets', 'uploads') : path.join(db.dataDir, 'uploads'));
 const FOLDERS = ['team', 'site'];
 const MAX_BYTES = 5 * 1024 * 1024;
 

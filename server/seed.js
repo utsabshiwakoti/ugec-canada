@@ -1,3 +1,4 @@
+require('dotenv').config(); // before ./db, which reads DB_HOST to choose the database
 const db = require('./db');
 const { hashPassword } = require('./auth');
 
@@ -7,6 +8,9 @@ const settings = {
   contact_email: 'kedar.dhungana@ugec.ca',
   phone_display: '+1 782 234 0211',
   phone_raw: '17822340211',
+  facebook_url: 'https://www.facebook.com/profile.php?id=61555036377421',
+  instagram_url: 'https://instagram.com/kd_ugec_canada',
+  tiktok_url: 'https://www.tiktok.com/@ugec.canada',
   stripe_url: 'https://buy.stripe.com/fZu4gy1CL7Mz2x86g16Zy00',
   rcic_name: 'Vimal Kumar',
   rcic_title: 'Regulated Canadian Immigration Consultant (RCIC)',
@@ -125,52 +129,47 @@ const posts = [
     'Intakes fill early. Some programs run morning and evening batches, which gives more flexibility.\n\nAllow time to collect documents, translate records if needed and complete the college application.\n\nMessage UGEC for the latest intake dates before you commit to a timeline.'],
 ];
 
-function seedAdmin() {
-  if (db.prepare('SELECT COUNT(*) c FROM users').get().c) return;
+async function seedAdmin() {
+  if ((await db.get('SELECT COUNT(*) AS c FROM users')).c) return;
   const email = process.env.ADMIN_EMAIL;
   const pw = process.env.ADMIN_PASSWORD;
   if (!email || !pw || pw === 'change-this-password-now') {
-    console.warn('[seed] No admin created. Set ADMIN_EMAIL and ADMIN_PASSWORD in .env, then restart.');
+    console.warn("[seed] No admin created. Set ADMIN_EMAIL and ADMIN_PASSWORD (in .env, or in GoDaddy's hosting settings), then restart.");
     return;
   }
-  db.prepare('INSERT INTO users(email,password_hash) VALUES(?,?)').run(email.toLowerCase(), hashPassword(pw));
+  await db.run('INSERT INTO users(email, password_hash, created_at) VALUES(?,?,?)', email.toLowerCase(), hashPassword(pw), db.now());
   console.log(`[seed] Admin created: ${email}`);
 }
 
-function seedContent() {
-  const tx = db.transaction(() => {
-    for (const [k, v] of Object.entries(settings)) db.prepare('INSERT OR IGNORE INTO settings(key,value) VALUES(?,?)').run(k, v);
-    if (!db.prepare('SELECT COUNT(*) c FROM programs').get().c) {
-      const ins = db.prepare(`INSERT INTO programs(slug,name,category,province,duration,delivery,fees,admission,placement,credential,pathways,guarantee,notes,coming_soon,sort)
-        VALUES(@slug,@name,@category,@province,@duration,@delivery,@fees,@admission,@placement,@credential,@pathways,@guarantee,@notes,@coming_soon,@sort)`);
-      programs.forEach((p, i) => ins.run({ duration: '', delivery: '', fees: '', admission: '', placement: '', credential: '', pathways: '', guarantee: '', notes: '', coming_soon: 0, sort: i, ...p }));
+async function seedContent() {
+  for (const [k, v] of Object.entries(settings)) await db.run(db.insertIgnore + ' INTO settings(`key`, value) VALUES(?,?)', k, v);
+  const empty = async (t) => !(await db.get(`SELECT COUNT(*) AS c FROM ${t}`)).c;
+  if (await empty('programs')) {
+    const cols = ['slug', 'name', 'category', 'province', 'duration', 'delivery', 'fees', 'admission', 'placement', 'credential', 'pathways', 'guarantee', 'notes', 'coming_soon', 'sort', 'updated_at'];
+    for (const [i, p] of programs.entries()) {
+      const row = { duration: '', delivery: '', fees: '', admission: '', placement: '', credential: '', pathways: '', guarantee: '', notes: '', coming_soon: 0, sort: i, updated_at: db.now(), ...p };
+      await db.run(`INSERT INTO programs(${cols.join(', ')}) VALUES(${cols.map(() => '?').join(', ')})`, ...cols.map((c) => row[c]));
     }
-    if (!db.prepare('SELECT COUNT(*) c FROM forms').get().c) {
-      const ins = db.prepare('INSERT INTO forms(type,title,fields) VALUES(?,?,?)');
-      forms.forEach(([t, title, f]) => ins.run(t, title, JSON.stringify(f, null, 2)));
-    }
-    if (!db.prepare('SELECT COUNT(*) c FROM team').get().c) {
-      const ins = db.prepare('INSERT INTO team(name,role,sort) VALUES(?,?,?)');
-      team.forEach(([n, r], i) => ins.run(n, r, i));
-    }
-    if (!db.prepare('SELECT COUNT(*) c FROM posts').get().c) {
-      const ins = db.prepare('INSERT INTO posts(slug,title,category,published_at,summary,body) VALUES(?,?,?,?,?,?)');
-      posts.forEach((p) => ins.run(...p));
-    }
-  });
-  tx();
+  }
+  if (await empty('forms')) for (const [t, title, fl] of forms) await db.run('INSERT INTO forms(type, title, fields) VALUES(?,?,?)', t, title, JSON.stringify(fl, null, 2));
+  if (await empty('team')) for (const [i, [n, r]] of team.entries()) await db.run('INSERT INTO team(name, role, sort) VALUES(?,?,?)', n, r, i);
+  if (await empty('posts')) for (const p of posts) await db.run('INSERT INTO posts(slug, title, category, published_at, summary, body) VALUES(?,?,?,?,?,?)', ...p);
 }
 
-function seedIfEmpty() { seedContent(); seedAdmin(); }
+async function seedIfEmpty() { await db.init(); await seedContent(); await seedAdmin(); }
 
 module.exports = { seedIfEmpty };
 
 if (require.main === module) {
   require('dotenv').config();
-  if (process.argv.includes('--reset')) {
-    for (const t of ['programs', 'forms', 'team', 'posts', 'settings']) db.exec(`DELETE FROM ${t}`);
-    console.log('[seed] Cleared content tables (leads and users kept).');
-  }
-  seedIfEmpty();
-  console.log('[seed] Done.');
+  (async () => {
+    await db.init();
+    if (process.argv.includes('--reset')) {
+      for (const t of ['programs', 'forms', 'team', 'posts', 'settings']) await db.run(`DELETE FROM ${t}`);
+      console.log('[seed] Cleared content tables (leads and users kept).');
+    }
+    await seedIfEmpty();
+    console.log('[seed] Done.');
+    await db.close();
+  })().catch((e) => { console.error(e); process.exit(1); });
 }

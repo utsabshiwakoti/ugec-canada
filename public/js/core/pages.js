@@ -10,14 +10,15 @@ import { contact } from '../pages/contact.js';
 import { blog, post } from '../pages/blog.js';
 import { programPage } from '../pages/program.js';
 import { legal } from '../pages/legal.js';
-import { portalLogin, portalPage } from '../pages/portal.js';
+import { portalLogin, portalPage, setPasswordPage } from '../pages/portal.js';
 
 export const cleanPath = (pathname) => (pathname.length > 1 ? pathname.replace(/\/$/, '') : '/');
 
 export function needs(path) {
   if (path === '/' || path === '/blog') return 'posts';
   if (path.startsWith('/blog/')) return { post: decodeURIComponent(path.split('/')[2] || '') };
-  if (path.startsWith('/referral-portal/')) return { portal: decodeURIComponent(path.split('/')[2] || '') };
+  if (path === '/referral-portal') return { portal: true };
+  if (path.startsWith('/referral-portal/set-password/')) return { setPassword: decodeURIComponent(path.split('/')[3] || '') };
   return null;
 }
 
@@ -25,17 +26,21 @@ export function pageFor(path, q, loaded = null) {
   let html = '', title = TITLES[path];
   if (path === '/') html = home();
   else if (path === '/about') html = about();
-  else if (path === '/already-in-canada') html = already(q);
+  else if (path === '/pr-leading-courses') html = already(q);
+  else if (path === '/educational-assistance') html = t('pages/educational-assistance');
+  else if (path === '/immigration-assistance') html = t('pages/immigration-assistance');
   else if (path === '/book-consultation') html = book(q);
   else if (path === '/partner-with-us') html = partner();
   else if (path === '/contact') html = contact();
   else if (path === '/blog') html = blog();
-  else if (path === '/referral-portal') html = portalLogin();
-  else if (path.startsWith('/blog/')) {
+  else if (path === '/referral-portal') {
+    if (loaded) { html = portalPage(loaded); title = 'Your referrals | UGEC Canada'; } else html = portalLogin();
+  } else if (path.startsWith('/referral-portal/set-password/')) {
+    html = loaded ? setPasswordPage(path.split('/')[3], loaded)
+      : portalLogin('This link has expired or was already used. Sign in below, or use "Forgot your password?" to get a new link.');
+    title = 'Set your password | UGEC Canada';
+  } else if (path.startsWith('/blog/')) {
     if (loaded) { html = post(loaded); title = loaded.title + ' | UGEC Canada'; }
-  } else if (path.startsWith('/referral-portal/')) {
-    if (loaded) { html = portalPage(loaded); title = 'Your referrals | UGEC Canada'; }
-    else return { found: false, title: 'Link not valid | UGEC Canada', html: portalLogin('This link is not valid any more. Enter your email below and we will send you your current link, or contact UGEC Canada.') };
   } else if (path.startsWith('/programs/')) {
     const p = find(path.split('/')[2]);
     if (p) { html = programPage(p); title = `${p.name} (${p.province}) | UGEC Canada`; }

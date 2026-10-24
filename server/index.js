@@ -8,11 +8,11 @@ const { metaFor, sitemap, siteIcon } = require('./seo');
 const { readTemplates } = require('./templates');
 const { render } = require('./render');
 const backup = require('./backup');
+const auth = require('./auth');
+const db = require('./db');
+const { asyncRoutes } = require('./async');
 
-seedIfEmpty();
-backup.schedule();
-
-const app = express();
+const app = asyncRoutes(express());
 const PUBLIC = path.join(__dirname, '..', 'public');
 const PROD = process.env.NODE_ENV === 'production';
 
@@ -36,6 +36,7 @@ app.use(helmet({
 }));
 app.use(express.json({ limit: '100kb' }));
 
+app.use('/api/portal', require('./routes/portal').router); // referral partner sign-in and portal
 app.use('/api', require('./routes/public'));
 app.use('/admin/api', require('./routes/admin'));
 app.use('/api', (req, res) => res.status(404).json({ error: 'Not found' }));
@@ -44,10 +45,10 @@ app.get('/robots.txt', (req, res) => {
   const b = (process.env.SITE_URL || '').replace(/\/$/, '');
   res.type('text/plain').send(`User-agent: *\nDisallow: /admin\nDisallow: /referral-portal/\n${b ? `Sitemap: ${b}/sitemap.xml\n` : ''}`);
 });
-app.get('/sitemap.xml', (req, res) => res.type('application/xml').send(sitemap()));
-app.get('/favicon.ico', (req, res) => res.redirect(302, siteIcon()));
+app.get('/sitemap.xml', async (req, res) => res.type('application/xml').send(await sitemap()));
+app.get('/favicon.ico', async (req, res) => res.redirect(302, await siteIcon()));
 
-const REDIRECTS = { '/study-in-canada': '/already-in-canada', '/educational-consultation': '/book-consultation?type=educational', '/immigration-consultation': '/book-consultation?type=immigration' };
+const REDIRECTS = { '/already-in-canada': '/pr-leading-courses', '/study-in-canada': '/pr-leading-courses', '/educational-consultation': '/book-consultation?type=educational', '/immigration-consultation': '/book-consultation?type=immigration' };
 app.get(Object.keys(REDIRECTS), (req, res) => {
   const target = REDIRECTS[req.path];
   const qs = req.url.includes('?') ? req.url.slice(req.url.indexOf('?') + 1) : '';
@@ -70,12 +71,13 @@ let cached = null;
 app.get('*', async (req, res) => {
   if (/\.[a-z0-9]+$/i.test(req.path)) return res.status(404).send('Not found');
   const origin = (process.env.SITE_URL || `${req.protocol}://${req.get('host')}`).replace(/\/$/, '');
-  const { known, private: isPrivate, html: seo } = metaFor(req.path, origin);
-  if (isPrivate || req.path.startsWith('/referral-portal/')) res.set('Cache-Control', 'no-store'); // partner portal pages
+  const { known, private: isPrivate, html: seo } = await metaFor(req.path, origin);
+  if (isPrivate || req.path.startsWith('/referral-portal')) res.set('Cache-Control', 'no-store'); // partner portal pages
   const parts = { SEO: seo, SSR: '', APP: '<div class="wrap sec"><p>Loading...</p></div>', BANNER: '', BRAND: '', NAV: '', HBOOK: '', ABAR: '', FOOT: '', WAF: '#' };
   try {
     const search = req.originalUrl.includes('?') ? req.originalUrl.slice(req.originalUrl.indexOf('?')) : '';
-    const { page, shell } = await render(req.path, search, origin);
+    const partner = await auth.currentPartner(req); // a signed-in referral partner sees their portal at /referral-portal
+    const { page, shell } = await render(req.path, search, origin, partner ? partner.id : null);
     Object.assign(parts, { SSR: ` data-ssr="${attr(req.originalUrl)}"`, APP: page.html, BANNER: shell.banner, BRAND: shell.brand, NAV: shell.nav, HBOOK: shell.hbook, ABAR: shell.abar, FOOT: shell.foot, WAF: attr(shell.waf) });
   } catch (e) {
     console.error('[render]', e); // the browser will still build the page itself
@@ -90,5 +92,13 @@ app.use((err, req, res, next) => {
   res.status(err.status || 500).json({ error: err.status === 400 ? 'Bad request' : 'Server error' });
 });
 
-const port = Number(process.env.PORT || 3000);
-app.listen(port, () => console.log(`UGEC Canada running at http://localhost:${port}  (admin: /admin)`));
+(async () => {
+  await seedIfEmpty();
+  backup.schedule();
+  const port = Number(process.env.PORT || 3000);
+  app.listen(port, '0.0.0.0', () => console.log(`UGEC Canada running at http://localhost:${port}  (admin: /admin, database: ${db.dialect})`));
+})().catch((e) => {
+  console.error('[start] Could not start the site:', e.message);
+  if (db.dialect === 'mysql') console.error('[start] Check the MySQL settings (DB_HOST, DB_PORT, DB_NAME, DB_USER, DB_PASSWORD).');
+  process.exit(1);
+});

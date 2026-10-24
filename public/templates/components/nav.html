@@ -1,1 +1,6 @@
-{{#each links}}<a href="{{href}}"{{#if current}} aria-current="page"{{/if}}>{{label}}</a>{{/each}}
+{{#each links}}{{#if children}}<div class="navdd">
+  <button type="button" data-act="bm" aria-haspopup="true" aria-expanded="false"{{#if current}} class="current"{{/if}}>{{label}} <span aria-hidden="true">&#9662;</span></button>
+  <ul class="bm-list" role="menu" hidden>
+    {{#each children}}<li role="none"><a role="menuitem" href="{{href}}"{{#if current}} aria-current="page"{{/if}}>{{label}}</a></li>{{/each}}
+  </ul>
+</div>{{else}}<a href="{{href}}"{{#if current}} aria-current="page"{{/if}}>{{label}}</a>{{/if}}{{/each}}

@@ -1,26 +1,35 @@
-{{> components/page-head kicker="For referral partners" title="Referral partner portal" lede="If you refer people to UGEC Canada, your private page shows who you have referred, how far each person has got, and your commission."}}
+{{> components/page-head kicker="For referral partners" title="Referral partner portal" lede="If you refer people to UGEC Canada, sign in to see who you have referred, how far each person has got, and your commission."}}
 
 <section class="sec tight">
   <div class="wrap cols two">
-    <div>
+    <div class="panel">
       {{#if notice}}<div class="note"><p>{{notice}}</p></div>{{/if}}
+      <h2>Sign in</h2>
+      <form class="f" data-portal-login novalidate>
+        <div class="fg"><label for="f_pl_email">Email</label><input id="f_pl_email" name="email" type="email" autocomplete="username" required></div>
+        <div class="fg"><label for="f_pl_password">Password</label><input id="f_pl_password" name="password" type="password" autocomplete="current-password" required></div>
+        <p class="err" role="alert" hidden></p>
+        <button class="btn btn-red" type="submit">Sign in</button>
+      </form>
+      <details class="forgot">
+        <summary>Forgot your password?</summary>
+        <form class="f" data-portal-forgot novalidate>
+          <p class="small">Enter your email and we will send you a link to choose a new password.</p>
+          <div class="fg"><label for="f_pf_email">Email</label><input id="f_pf_email" name="email" type="email" autocomplete="email" required></div>
+          <p class="err" role="alert" hidden></p>
+          <button class="btn btn-line" type="submit">Send me a link</button>
+        </form>
+      </details>
+    </div>
+    <div>
       <h2>How it works</h2>
       <ol class="steps">
+        <li>UGEC Canada sends you an invite to choose your password</li>
         <li>Share your personal referral link, or ask people to choose your name in "Who referred you?"</li>
-        <li>When they contact UGEC Canada, they appear on your private page</li>
-        <li>Follow their progress, from first contact to enrolment, and your commission</li>
+        <li>Sign in here to follow their progress, from first contact to enrolment, and your commission</li>
       </ol>
-      <p class="small mt-s">Your page shows each person's first name and last initial, what they asked about and how far they have got. Their contact details and messages stay private.</p>
-      <p class="small">Not a referral partner yet? <a href="/contact">Contact us</a> to become one.</p>
-    </div>
-    <div class="panel">
-      <h2>Get your private link</h2>
-      <p class="small">Enter the email address UGEC Canada has for you, and we will email you the link to your page.</p>
-      <form class="f" data-portal novalidate>
-        <div class="fg"><label for="f_portal_email">Your email</label><input id="f_portal_email" name="email" type="email" autocomplete="email" required></div>
-        <p class="err" role="alert" hidden></p>
-        <button class="btn btn-red" type="submit">Email me my link</button>
-      </form>
+      <p class="small mt-s">You see each person's first name and last initial, what they asked about and how far they have got. Their contact details and messages stay private.</p>
+      <p class="small">Not a referral partner yet, or no invite? <a href="/contact">Contact us</a>.</p>
     </div>
   </div>
 </section>

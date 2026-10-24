@@ -8,3 +8,12 @@ data/backups/
 data/uploads/
 npm-debug.log*
 .DS_Store
+
+# The upload file made by "npm run package"
+ugec-godaddy.zip
+# Photos uploaded on GoDaddy are kept here (never part of the code)
+public/assets/
+
+# Personal files and local editor settings (never part of the site)
+New folder/
+.vscode/

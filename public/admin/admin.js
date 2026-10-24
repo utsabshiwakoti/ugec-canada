@@ -140,7 +140,7 @@ async function leads() {
   }));
 }
 
-async function referrals() {
+async function referrals(invite = null) {
   const current = newScreen();
   const d = await api('/referrals/summary');
   if (!current()) return;
@@ -149,16 +149,33 @@ async function referrals() {
   const tot = d.partners.reduce((a, p) => ({ pending: a.pending + p.pending, approved: a.approved + p.approved, paid: a.paid + p.paid, total: a.total + p.total }), { pending: 0, approved: 0, paid: 0, total: 0 });
   shell(`<div class="bar"><h1 class="grow" style="margin:0">Referrals</h1><button class="b" id="addp">Add partner</button></div>
    <p>Clients pick who referred them on the website forms, or arrive through a partner's link. Open a lead to confirm the referral and set the commission. Commission amounts are in CAD.</p>
+   <p class="hint">Partners can sign in to their own <a href="/referral-portal" target="_blank" rel="noopener">referral partner portal</a> (separate from this admin panel) to follow their referrals: first name and last initial, what they asked about, progress and commission, never contact details. To give a partner access, add their email in Referral partners, then click <strong>Send sign-in invite</strong>: they get a link to choose their own password. Use it again if they forget their password.</p>
+   ${invite ? `<div class="card invite" role="status"><h2>Sign-in invite for ${esc(invite.name)}</h2>
+     <p>${invite.emailed ? `Emailed to <strong>${esc(invite.email)}</strong>. You can also send this link yourself (for example on WhatsApp):` : `Email is not set up, so send this link to ${esc(invite.name)} yourself (for example on WhatsApp or by email to ${esc(invite.email)}):`}</p>
+     <div class="bar" style="margin:0"><input class="grow" readonly value="${esc(invite.link)}" aria-label="Invite link"><button class="b" data-copy="${esc(invite.link)}">Copy link</button></div>
+     <p class="hint">The link works for 7 days and only once. They choose their password, then sign in with ${esc(invite.email)}.</p></div>` : ''}
    <div class="counts"><span class="pill">Referred leads: ${tot.total}</span><span class="pill">Pending: ${money(tot.pending)}</span><span class="pill">Approved, unpaid: ${money(tot.approved)}</span><span class="pill ok">Paid: ${money(tot.paid)}</span></div>
-   <div class="tw" style="margin-top:14px"><table><thead><tr><th>Partner</th><th>Link</th><th>Leads</th><th>Booked</th><th>Applied</th><th>Enrolled</th><th>Pending</th><th>Approved</th><th>Paid</th><th></th></tr></thead><tbody>
+   <div class="tw" style="margin-top:14px"><table><thead><tr><th>Partner</th><th>Referral link</th><th>Portal sign-in</th><th>Leads</th><th>Booked</th><th>Applied</th><th>Enrolled</th><th>Pending</th><th>Approved</th><th>Paid</th><th></th></tr></thead><tbody>
    ${d.partners.map((p) => `<tr><td><strong>${esc(p.name)}</strong>${p.active ? '' : ' <span class="pill">inactive</span>'}${p.listed ? '' : ' <span class="pill">link only</span>'}<br><span class="hint">${esc(p.code)}</span></td>
-    <td><button class="b line" data-copy="${esc(link(p.code))}">Copy link</button></td><td>${p.total}</td><td>${p.booked}</td><td>${p.applied}</td><td>${p.enrolled}</td><td>${money(p.pending)}</td><td>${money(p.approved)}</td><td>${money(p.paid)}</td>
-    <td><button class="b line" data-leads="${p.id}">View leads</button></td></tr>`).join('') || '<tr><td colspan="10">No partners yet. Add one to start tracking referrals.</td></tr>'}</tbody></table></div>
+    <td><button class="b line" data-copy="${esc(link(p.code))}">Copy link</button></td>
+    <td>${portalStatus(p)}<br><button class="b line" style="margin-top:4px" data-invite="${p.id}"${p.email && p.portal_enabled ? '' : ' disabled'} title="${p.email ? (p.portal_enabled ? 'Send a link to choose a password' : 'Portal sign-in is turned off for this partner') : 'Add an email address first'}">${p.has_password ? 'Send password reset' : 'Send sign-in invite'}</button></td><td>${p.total}</td><td>${p.booked}</td><td>${p.applied}</td><td>${p.enrolled}</td><td>${money(p.pending)}</td><td>${money(p.approved)}</td><td>${money(p.paid)}</td>
+    <td><button class="b line" data-leads="${p.id}">View leads</button></td></tr>`).join('') || '<tr><td colspan="11">No partners yet. Add one to start tracking referrals.</td></tr>'}</tbody></table></div>
    <p class="hint" style="margin-top:12px">Leads with no partner: ${d.unattributed}${d.other ? `, including ${d.other} where the client typed a name that did not match a partner` : ''}. <button class="b line" id="unm">Review them</button></p>`);
   $('#addp').onclick = () => { tab = 'partners'; draw(); };
   $('#unm').onclick = () => { lf = { status: 'all', form: 'all', partner: 'none', q: '' }; tab = 'leads'; draw(); };
   root.querySelectorAll('[data-leads]').forEach((b) => (b.onclick = () => { lf = { status: 'all', form: 'all', partner: b.dataset.leads, q: '' }; tab = 'leads'; draw(); }));
   root.querySelectorAll('[data-copy]').forEach((b) => (b.onclick = async () => { try { await navigator.clipboard.writeText(b.dataset.copy); b.textContent = 'Copied'; } catch { prompt('Copy this link:', b.dataset.copy); } }));
+  root.querySelectorAll('[data-invite]').forEach((b) => (b.onclick = async () => {
+    b.disabled = true;
+    try { const r = await api(`/partners/${b.dataset.invite}/invite`, { method: 'POST' }); referrals({ ...r, name: d.partners.find((p) => String(p.id) === b.dataset.invite).name }); window.scrollTo(0, 0); }
+    catch (x) { say(x.message, 'err'); referrals(); }
+  }));
+}
+function portalStatus(p) {
+  if (!p.portal_enabled) return '<span class="pill">sign-in off</span>';
+  if (!p.email) return '<span class="hint">needs an email</span>';
+  if (p.has_password) return `<span class="pill ok">can sign in</span><br><span class="hint">last: ${esc(when(p.last_login))}</span>`;
+  return p.invited ? '<span class="pill">invited</span>' : '<span class="hint">not invited yet</span>';
 }
 
 const keyName = (s) => String(s).toLowerCase().normalize('NFKD').replace(/[^\w\s]/g, '').trim().replace(/\s+/g, '_').slice(0, 40);
@@ -298,7 +315,7 @@ async function editor(key, row, rows) {
   for (const f of def.fields) if (f.t === 'ref' && !refs[f.ref]) refs[f.ref] = await api('/' + f.ref);
   if (!current()) return;
   const isNew = !row;
-  const defaults = isNew ? { published: 1, visible: 1, enabled: 1, listed: 1, active: 1, sort: 0, published_at: new Date().toISOString().slice(0, 10) } : row;
+  const defaults = isNew ? { published: 1, visible: 1, enabled: 1, listed: 1, active: 1, portal_enabled: 1, sort: 0, published_at: new Date().toISOString().slice(0, 10) } : row;
   shell(`<p><button class="b line" id="back">Back to list</button></p><div class="card"><h2>${isNew ? 'Add' : 'Edit'}: ${esc(def.label)}</h2>
    <form id="ef">${def.fields.map((f) => (f.n === def.id && !isNew && !def.idEditable ? '' : input(f, defaults[f.n], { refs, rows }))).join('')}
    <div class="bar" style="margin-top:18px"><button class="b" type="submit">Save</button>${isNew ? '' : '<button class="b red" type="button" id="rm">Delete</button>'}</div></form></div>`);
@@ -325,7 +342,7 @@ async function settings() {
   if (!current()) return;
   shell(`<h1>Site settings</h1>
    <div class="card"><h2>Email</h2>${mail.enabled
-    ? `<p>Email is set up: new leads are emailed to the team${s.confirm_email !== '0' ? ', and people who send a form get a confirmation' : ''}.</p><div class="bar" style="margin:0"><button class="b line" type="button" id="testmail">Send a test email to me</button><span class="hint" id="testmsg"></span></div>`
+    ? `<p>Email is set up${mail.mode === 'gateway' ? ' (through GoDaddy\'s email service)' : ''}: new leads are emailed to the team${s.confirm_email !== '0' ? ', and people who send a form get a confirmation' : ''}.</p><div class="bar" style="margin:0"><button class="b line" type="button" id="testmail">Send a test email to me</button><span class="hint" id="testmsg"></span></div>`
     : '<p>Email is <strong>not set up yet</strong>, so new leads only appear in Leads and nobody is emailed. To turn it on, add the SMTP settings from your email provider to the <code>.env</code> file (see README, "Lead emails") and restart the site.</p>'}</div>
    <div class="card"><form id="sf">${schema.settingsFields.map((f) => input(f, f.t === 'checkbox' ? s[f.n] === '1' : s[f.n])).join('')}
    <div class="bar" style="margin-top:18px"><button class="b" type="submit">Save settings</button></div></form></div>`);
@@ -366,9 +383,11 @@ async function users() {
     <p class="hint">Send the person their email and temporary password privately (not in the same message), and ask them to change it in Account after signing in.</p></div>
 
    <div class="card"><h2>Backups</h2>
-    <p class="hint" style="margin-bottom:12px">A copy of everything (leads, programs, settings) is saved automatically once a day, and the latest ${bk.keep} are kept, together with a copy of every uploaded photo. They are stored on the same computer as the site, so also download one now and then and keep it somewhere safe.</p>
+    ${bk.mode === 'sqlite' ? `<p class="hint" style="margin-bottom:12px">A copy of everything (leads, programs, settings) is saved automatically once a day, and the latest ${bk.keep} are kept, together with a copy of every uploaded photo. They are stored on the same computer as the site, so also download one now and then and keep it somewhere safe.</p>
     <div class="bar"><a class="b" href="/admin/api/backup/download">Download a backup now</a><button class="b line" type="button" id="bknow">Make today's backup now</button><span class="hint" id="bkmsg"></span></div>
-    ${bk.backups.length ? `<div class="tw"><table><thead><tr><th>Automatic backup</th><th>Size</th></tr></thead><tbody>${bk.backups.map((b) => `<tr><td>${esc(b.name)}</td><td>${kb(b.size)}</td></tr>`).join('')}</tbody></table></div>` : '<p class="hint">No automatic backups yet. The first one is made a minute after the site starts.</p>'}</div>
+    ${bk.backups.length ? `<div class="tw"><table><thead><tr><th>Automatic backup</th><th>Size</th></tr></thead><tbody>${bk.backups.map((b) => `<tr><td>${esc(b.name)}</td><td>${kb(b.size)}</td></tr>`).join('')}</tbody></table></div>` : '<p class="hint">No automatic backups yet. The first one is made a minute after the site starts.</p>'}`
+    : `<p class="hint" style="margin-bottom:12px">"Download a backup now" saves a file with everything (leads, programs, partners, settings) to your computer. Do it regularly, for example every week, and keep the files somewhere safe such as Google Drive. Photos are not in it; keep your own copies of the logo and team photos.</p>
+    <div class="bar"><a class="b" href="/admin/api/backup/download">Download a backup now</a></div>`}</div>
 
    <div class="card"><h2>Recent activity</h2>
     ${act.length ? `<div class="tw"><table><thead><tr><th>When</th><th>Who</th><th>What</th></tr></thead><tbody>${act.map((a) => `<tr><td style="white-space:nowrap">${esc(when(a.created_at))}</td><td>${esc(a.user_email)}</td><td>${esc(a.action)}</td></tr>`).join('')}</tbody></table></div>` : '<p class="hint">Nothing yet.</p>'}</div>`);
@@ -382,7 +401,7 @@ async function users() {
     if (!confirm(`Remove the login for ${b.dataset.email}? They will be signed out and can no longer use the admin panel.`)) return;
     try { await api('/users/' + b.dataset.rmuser, { method: 'DELETE' }); say('Login removed.'); users(); } catch (x) { say(x.message, 'err'); users(); }
   }));
-  $('#bknow').onclick = async () => {
+  if ($('#bknow')) $('#bknow').onclick = async () => {
     $('#bkmsg').textContent = 'Working...';
     try { const r = await api('/backup/run', { method: 'POST' }); say(r.made ? `Backup ${r.file} saved.` : `Today's backup (${r.file}) already exists.`); users(); }
     catch (x) { $('#bkmsg').textContent = x.message; }

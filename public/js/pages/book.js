@@ -9,10 +9,10 @@ export function book(q) {
   S.bookType = key;
   const type = BOOKING.find((x) => x.key === key), pr = find(q.get('program'));
   const pre = { ...(S.bookPre || {}) };
-  if (pr) pre.interest = key === 'trades' ? pr.name : `${pr.name} (${pr.province})`;
+  if (pr) pre.interest = `${pr.name} (${pr.province})`;
   return t('pages/book', {
     types: BOOKING.map((o) => ({ ...o, selected: o.key === key })),
-    is: { [key]: true }, // is.educational, is.already, is.trades or is.immigration
+    is: { [key]: true }, // is.educational or is.immigration
     form: formView(type.form, pre, type.submit),
   });
 }

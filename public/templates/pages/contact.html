@@ -10,6 +10,10 @@
         Phone / WhatsApp: <a href="tel:+{{site.phoneRaw}}">{{site.phoneDisplay}}</a>
       </p>
       <a class="btn btn-wa" href="{{waQuestion}}" target="_blank" rel="noopener">WhatsApp UGEC</a>
+      {{#if site.social}}
+      <h3 class="mt-s">Follow us</h3>
+      <p class="social">{{#each site.social}}<a href="{{href}}" target="_blank" rel="noopener">{{label}}</a>{{/each}}</p>
+      {{/if}}
     </div>
     <div class="panel">
       <h2>Send a message</h2>

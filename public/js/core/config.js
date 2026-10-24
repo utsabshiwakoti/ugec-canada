@@ -1,16 +1,15 @@
 export const BOOKING = [
-  { key: 'educational', label: 'Educational consultation', price: 'Free', form: 'educational', blurb: 'Programs, colleges, provinces and budgets', submit: 'Book Educational Consultation' },
-  { key: 'already', label: 'Already in Canada', price: 'Free', form: 'already', blurb: 'Next steps for students and residents here now', submit: 'Book Consultation' },
-  { key: 'trades', label: 'Skilled trades', price: 'Free', form: 'trades', blurb: 'Gas, HVAC, plumbing, carpentry, welding', submit: 'Book Consultation' },
-  { key: 'immigration', label: 'Immigration consultation', price: 'Paid', form: 'immigration', blurb: 'With an authorized immigration professional', submit: 'Send intake details' },
+  { key: 'educational', label: 'Educational consultation', price: 'Free', form: 'educational', blurb: 'Discuss PR-leading courses, programs and colleges', submit: 'Book Educational Consultation' },
+  { key: 'immigration', label: 'Immigration consultation', price: 'Paid', form: 'immigration', blurb: 'With a Regulated Canadian Immigration Consultant (RCIC)', submit: 'Send intake details' },
 ];
 
 export const DISCLAIMER = 'UGEC Canada is an education consultancy. Program information, tuition, admission requirements, intakes and availability are subject to change and should be confirmed with the educational institution. UGEC does not guarantee admission, visas, work permits, permanent residence or employment. Regulated immigration advice, where required, is provided by an appropriately authorized professional.';
 
 export const LEGAL = { privacy: 'Privacy Policy', terms: 'Terms & Conditions', cookies: 'Cookie Policy', disclaimer: 'Disclaimer', accessibility: 'Accessibility' };
 
-export const NAV = [['/', 'Home'], ['/already-in-canada', 'Already in Canada'], ['/partner-with-us', 'Partner With Us'], ['/blog', 'Blog / Updates'], ['/contact', 'Contact Us'], ['/about', 'About Us']];
+export const NAV = [['/', 'Home'], ['Already in Canada', [['/pr-leading-courses', 'PR-Leading Courses'], ['/educational-assistance', 'Educational Assistance']]], ['/immigration-assistance', 'Immigration Assistance'], ['/partner-with-us', 'Partner With Us'], ['/blog', 'Blog / Updates'], ['/contact', 'Contact Us'], ['/about', 'About Us']];
+export const NAV_LINKS = NAV.flatMap(([a, b]) => (Array.isArray(b) ? b : [[a, b]]));
 
-export const TITLES = { '/': 'UGEC Canada | Education & Career Opportunities in Canada', '/about': 'About UGEC Canada', '/already-in-canada': 'Already in Canada? Programs & Next Steps | UGEC Canada', '/book-consultation': 'Book a Consultation | UGEC Canada', '/partner-with-us': 'Partner With UGEC Canada', '/blog': 'Blog & Updates | UGEC Canada', '/contact': 'Contact UGEC Canada', '/referral-portal': 'Referral partner portal | UGEC Canada' };
+export const TITLES = { '/': 'UGEC Canada | Education & Career Opportunities in Canada', '/about': 'About UGEC Canada', '/pr-leading-courses': 'PR-Leading Courses in Canada | UGEC Canada', '/educational-assistance': 'Educational Assistance: Study Permit Pathways | UGEC Canada', '/immigration-assistance': 'Professional Immigration Assistance | UGEC Canada', '/book-consultation': 'Book a Consultation | UGEC Canada', '/partner-with-us': 'Partner With UGEC Canada', '/blog': 'Blog & Updates | UGEC Canada', '/contact': 'Contact UGEC Canada', '/referral-portal': 'Referral partner portal | UGEC Canada' };
 
-export const ALIASES = { '/study-in-canada': '/already-in-canada', '/educational-consultation': '/book-consultation?type=educational', '/immigration-consultation': '/book-consultation?type=immigration' };
+export const ALIASES = { '/already-in-canada': '/pr-leading-courses', '/study-in-canada': '/pr-leading-courses', '/educational-consultation': '/book-consultation?type=educational', '/immigration-consultation': '/book-consultation?type=immigration' };

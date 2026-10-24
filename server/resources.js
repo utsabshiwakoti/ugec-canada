@@ -32,8 +32,9 @@ module.exports = {
     label: 'Referral partners', table: 'referral_partners', id: 'id', order: 'name', list: ['name', 'code', 'listed', 'active'],
     fields: [
       T('name', 'Partner name', { r: 1 }), T('code', 'Referral code (auto from name if blank)'),
-      T('email', 'Email'), T('phone', 'Phone'), TA('commission_terms', 'Commission terms (internal)'),
+      T('email', 'Email (they sign in to the referral partner portal with this)'), T('phone', 'Phone'), TA('commission_terms', 'Commission terms (internal)'),
       CB('listed', 'Show in the "Who referred you?" list on the website'), CB('active', 'Active (accepts new referrals)'),
+      CB('portal_enabled', 'Can sign in to the referral partner portal (untick to remove their access; they are signed out at once)'),
       TA('notes', 'Internal notes'),
     ],
   },
@@ -67,6 +68,7 @@ module.exports.settingsFields = [
   H('Contact details', 'Shown in the footer, on the Contact page and used for WhatsApp buttons.'),
   T('tagline', 'Tagline'), T('location', 'Location'), T('contact_email', 'Contact email'),
   T('phone_display', 'Phone shown on site'), T('phone_raw', 'WhatsApp number (digits only, with country code, e.g. 17822340211)'),
+  T('facebook_url', 'Facebook page link'), T('instagram_url', 'Instagram page link'), T('tiktok_url', 'TikTok page link'),
   H('Immigration consultation', 'Shown on the immigration booking page.'),
   T('stripe_url', 'Booking and payment link (Stripe)'),
   T('rcic_name', 'Immigration professional name'), T('rcic_title', 'Immigration professional title'), T('rcic_licence', 'Licence number'),

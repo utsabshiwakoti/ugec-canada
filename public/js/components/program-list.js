@@ -4,7 +4,7 @@ export function programView(p) {
   const soon = p.coming_soon ? 'Coming soon' : TBC;
   return {
     slug: p.slug, name: p.name, province: p.province, category: p.category, guarantee: p.guarantee || '',
-    bookHref: bookHref(p.category === 'Skilled trades' ? 'trades' : 'educational', p.slug),
+    bookHref: bookHref('educational', p.slug),
     rows: p.coming_soon
       ? [{ label: 'Status', value: 'Details coming soon' }]
       : [{ label: 'Duration', value: p.duration || TBC }, { label: 'Fees', value: p.fees || TBC }, { label: 'Delivery', value: p.delivery || p.placement || TBC }],
