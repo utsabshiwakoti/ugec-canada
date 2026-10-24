@@ -58,12 +58,14 @@ app.get(Object.keys(REDIRECTS), (req, res) => {
 let templatesJson = null;
 app.get('/templates.json', (req, res) => {
   const body = PROD ? (templatesJson ||= JSON.stringify(readTemplates())) : JSON.stringify(readTemplates());
-  res.set('Cache-Control', PROD ? 'public, max-age=300' : 'no-cache').type('application/json').send(body);
+  res.set('Cache-Control', 'no-cache').type('application/json').send(body);
 });
 
-app.use(express.static(PUBLIC, { index: false, maxAge: PROD ? '1h' : 0 }));
+const CODE = /\.(?:js|mjs|css|html|json)$/i;
+app.use(express.static(PUBLIC, { index: false, maxAge: PROD ? '1h' : 0,
+  setHeaders: (res, file) => { if (CODE.test(file)) res.set('Cache-Control', 'no-cache'); } }));
 app.use('/uploads', express.static(require('./uploads').DIR, { index: false, maxAge: PROD ? '30d' : 0, immutable: PROD }));
-app.get(['/admin', '/admin/'], (req, res) => res.sendFile(path.join(PUBLIC, 'admin', 'index.html')));
+app.get(['/admin', '/admin/'], (req, res) => res.set('Cache-Control', 'no-cache').sendFile(path.join(PUBLIC, 'admin', 'index.html')));
 
 const attr = (s) => String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
 const template = () => fs.readFileSync(path.join(PUBLIC, 'index.html'), 'utf8');
