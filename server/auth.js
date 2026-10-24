@@ -9,6 +9,7 @@ if (!SECRET || SECRET === 'change-me') {
   console.warn('[auth] No SESSION_SECRET set; sessions reset on every restart (dev only).');
 }
 const COOKIE = 'ugec_sid';           // admin panel
+const PENDING_COOKIE = 'ugec_2fa';     // admin password was right; waiting for the two-step code
 const PARTNER_COOKIE = 'ugec_partner'; // referral partner portal (a separate sign-in)
 const TTL = 1000 * 60 * 60 * 12; // admin: 12 hours
 const PARTNER_TTL = 1000 * 60 * 60 * 24 * 14; // partners: 14 days
@@ -25,6 +26,7 @@ function verifyPassword(pw, stored) {
   return crypto.timingSafeEqual(hash, Buffer.from(h, 'hex'));
 }
 const sign = (p) => crypto.createHmac('sha256', SECRET).update(p).digest('base64url');
+const pwv = (hash) => crypto.createHash('sha256').update(String(hash)).digest('base64url').slice(0, 12);
 
 function setCookie(res, name, data, ttl) {
   const payload = Buffer.from(JSON.stringify({ ...data, exp: Date.now() + ttl })).toString('base64url');
@@ -39,11 +41,23 @@ function readCookie(req, name) {
   try { const d = JSON.parse(Buffer.from(payload, 'base64url').toString()); return d.exp < Date.now() ? null : d; } catch { return null; }
 }
 
-function issue(res, uid) { setCookie(res, COOKIE, { uid }, TTL); }
-function clear(res) { res.clearCookie(COOKIE, { path: '/' }); }
+const uv = (u) => pwv(`${u.password_hash}|${u.totp_on}`);
+function issue(res, u) { res.clearCookie(PENDING_COOKIE, { path: '/' }); setCookie(res, COOKIE, { uid: u.id, v: uv(u) }, TTL); }
+function clear(res) { res.clearCookie(COOKIE, { path: '/' }); res.clearCookie(PENDING_COOKIE, { path: '/' }); }
 async function currentUser(req) {
   const d = readCookie(req, COOKIE);
-  return d ? (await db.get('SELECT id, email FROM users WHERE id=?', d.uid)) || null : null;
+  if (!d) return null;
+  const u = await db.get('SELECT id, email, name, role, totp_on, password_hash FROM users WHERE id=?', d.uid);
+  if (!u || uv(u) !== d.v) return null;
+  const { password_hash, ...rest } = u;
+  return { ...rest, totp_on: !!u.totp_on, admin: u.role !== 'staff' };
+}
+function issuePending(res, u) { setCookie(res, PENDING_COOKIE, { uid: u.id, v: uv(u) }, 5 * 60 * 1000); }
+async function pendingUser(req) {
+  const d = readCookie(req, PENDING_COOKIE);
+  if (!d) return null;
+  const u = await db.get('SELECT * FROM users WHERE id=?', d.uid);
+  return u && uv(u) === d.v ? u : null;
 }
 async function requireAuth(req, res, next) {
   const u = await currentUser(req);
@@ -52,8 +66,11 @@ async function requireAuth(req, res, next) {
   req.user = u;
   next();
 }
+function requireAdmin(req, res, next) {
+  if (!req.user || !req.user.admin) return res.status(403).json({ error: 'Only admins can do this. Ask an admin if you need access.' });
+  next();
+}
 
-const pwv = (hash) => crypto.createHash('sha256').update(String(hash)).digest('base64url').slice(0, 12);
 function issuePartner(res, partner) { setCookie(res, PARTNER_COOKIE, { pid: partner.id, v: pwv(partner.password_hash) }, PARTNER_TTL); }
 function clearPartner(res) { res.clearCookie(PARTNER_COOKIE, { path: '/' }); }
 async function currentPartner(req) {
@@ -63,4 +80,4 @@ async function currentPartner(req) {
   return p && pwv(p.password_hash) === d.v ? p : null;
 }
 
-module.exports = { hashPassword, verifyPassword, issue, clear, currentUser, requireAuth, issuePartner, clearPartner, currentPartner };
+module.exports = { hashPassword, verifyPassword, issue, clear, currentUser, requireAuth, requireAdmin, issuePending, pendingUser, issuePartner, clearPartner, currentPartner };

@@ -50,16 +50,29 @@ posts, and creates the admin from `ADMIN_EMAIL` / `ADMIN_PASSWORD`. After that, 
 Admin > Account and remove `ADMIN_PASSWORD` from `.env`.
 
 ## What the team can do in /admin
-- **Leads**: view, search, filter, set status, add notes, delete, **Export CSV**.
+- **Dashboard**: new and unassigned leads, follow-ups due, leads per week, the pipeline by status, where leads come
+  from and top referral partners.
+- **Leads**: views (open, assigned to me, unassigned, follow-ups due), search and filters. Open a lead for WhatsApp /
+  email / call buttons, status, who it is assigned to, a follow-up date, "paid", and a history of notes and changes.
+  Repeat requests from the same person are marked "Returning". Select several leads to change their status, assign them,
+  set a follow-up date, export or delete them at once. **Export CSV**.
+- **Morning email**: after 8 am (Halifax time; set `BUSINESS_TZ` to change it), each login with "Daily follow-up email"
+  on (My account) gets the follow-ups due on their leads and the new leads nobody has picked up. Only sent when there is
+  something to do, and only when email works.
 - **Programs**: add, edit, remove, unpublish; update fees, intakes, provider, and every field on the program page.
 - **Colleges / providers**, **Blog**, **Team**: add and edit. Team photos are uploaded in the Team editor.
 - **Forms**: turn forms on or off, add, remove, reorder and edit the questions (label, type of answer, required,
   dropdown choices), set a notification email per form.
-- **Site settings**: logo (header and footer of every page) and its size (slider with a live header preview), site icon, link preview image, home and About page photos,
-  announcement banner, contact details, Stripe booking link, immigration professional and licence number, confirmation
-  emails, province and category text. The Email box at the top shows whether email is set up and sends a test email.
-- **Admin users**: give each team member their own login, remove a login, see recent activity (who changed what),
-  download a backup.
+- **Site settings** (one tab per section): contact details and social links, Stripe booking link, immigration
+  professional and licence number, logo and photos (with the photo editor), home page text, the wording of the
+  Educational Assistance and Immigration Assistance pages and the footer disclaimer (**Page text**), the announcement
+  banner and confirmation emails. The Email box shows whether email works and sends a test email.
+- **Team & security**: give each team member their own login as **Admin** (everything) or **Staff** (Dashboard and
+  Leads only; no deleting, settings, content or commissions), change roles, reset someone's two-step sign-in, see recent
+  activity (who changed what), download a backup.
+- **My account**: name, the morning email, password, and **two-step sign-in** (a 6-digit code from an authenticator app
+  such as Google Authenticator, after the password). If the only admin loses their phone: set `RESET_2FA` to that
+  admin's email in the hosting settings, restart, sign in with the password, then remove `RESET_2FA`.
 
 Lists such as the FAQ, client stories, category descriptions and form questions are edited as separate boxes
 (Add, Remove, move up and down), so nobody needs to type JSON. To add a new kind of list, describe its boxes with `LIST(...)`

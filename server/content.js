@@ -1,6 +1,7 @@
 const db = require('./db');
 
 const parse = (s, fb) => { try { return JSON.parse(s); } catch { return fb; } };
+const lines = (s) => String(s || '').split('\n').map((x) => x.trim()).filter(Boolean);
 
 async function site() {
   const s = await db.getSettings();
@@ -16,6 +17,11 @@ async function site() {
       logoHeight: Math.min(96, Math.max(28, Number(s.logo_height) || 44)),
       faq: parse(s.faq, []), testimonials: parse(s.testimonials, []),
       social: [['Facebook', s.facebook_url], ['Instagram', s.instagram_url], ['TikTok', s.tiktok_url]].filter(([, href]) => href).map(([label, href]) => ({ label, href })),
+      disclaimer: s.site_disclaimer || '',
+      pages: {
+        edu: { lede: s.edu_lede || '', pathways: parse(s.edu_pathways, []), dli: s.edu_dli_text || '', levels: lines(s.edu_levels) },
+        imm: { lede: s.imm_lede || '', filing: lines(s.imm_filing), study: lines(s.imm_study), dli: s.imm_dli_text || '', disclaimer: s.imm_disclaimer || '' },
+      },
     },
     forms,
     referrers: await db.all('SELECT code, name FROM referral_partners WHERE active=1 AND listed=1 ORDER BY name'),

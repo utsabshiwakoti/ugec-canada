@@ -50,6 +50,10 @@ CREATE INDEX IF NOT EXISTS idx_leads_partner ON leads(referral_partner_id);
 CREATE TABLE IF NOT EXISTS activity (
   id INTEGER PRIMARY KEY AUTOINCREMENT, user_email TEXT NOT NULL DEFAULT '', action TEXT NOT NULL,
   created_at TEXT NOT NULL DEFAULT (datetime('now')));
+CREATE TABLE IF NOT EXISTS lead_events (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, lead_id INTEGER NOT NULL, user_email TEXT NOT NULL DEFAULT '',
+  kind TEXT NOT NULL DEFAULT 'note', text TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL DEFAULT (datetime('now')));
+CREATE INDEX IF NOT EXISTS idx_events_lead ON lead_events(lead_id);
 `;
 
 const MYSQL_TABLES = [
@@ -84,8 +88,23 @@ const MYSQL_TABLES = [
     FOREIGN KEY (referral_partner_id) REFERENCES referral_partners(id))`,
   `activity (id INT AUTO_INCREMENT PRIMARY KEY, user_email VARCHAR(255) NOT NULL DEFAULT '', action VARCHAR(300) NOT NULL,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP)`,
+  `lead_events (id INT AUTO_INCREMENT PRIMARY KEY, lead_id INT NOT NULL, user_email VARCHAR(255) NOT NULL DEFAULT '',
+    kind VARCHAR(20) NOT NULL DEFAULT 'note', text TEXT, created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_events_lead (lead_id))`,
 ];
-const TABLES = ['settings', 'users', 'providers', 'programs', 'posts', 'team', 'forms', 'referral_partners', 'leads', 'activity'];
+const TABLES = ['settings', 'users', 'providers', 'programs', 'posts', 'team', 'forms', 'referral_partners', 'leads', 'lead_events', 'activity'];
+
+const NEW_COLUMNS = [
+  ['users', 'name', "TEXT NOT NULL DEFAULT ''", "VARCHAR(255) NOT NULL DEFAULT ''"],
+  ['users', 'role', "TEXT NOT NULL DEFAULT 'admin'", "VARCHAR(20) NOT NULL DEFAULT 'admin'"],
+  ['users', 'totp_secret', "TEXT NOT NULL DEFAULT ''", "VARCHAR(64) NOT NULL DEFAULT ''"],
+  ['users', 'totp_on', 'INTEGER NOT NULL DEFAULT 0', 'TINYINT NOT NULL DEFAULT 0'],
+  ['users', 'totp_last', 'INTEGER NOT NULL DEFAULT 0', 'BIGINT NOT NULL DEFAULT 0'],
+  ['users', 'digest', 'INTEGER NOT NULL DEFAULT 1', 'TINYINT NOT NULL DEFAULT 1'],
+  ['leads', 'assigned_to', 'INTEGER', 'INT NULL'],
+  ['leads', 'follow_up', "TEXT NOT NULL DEFAULT ''", "VARCHAR(10) NOT NULL DEFAULT ''"],
+  ['leads', 'paid', 'INTEGER NOT NULL DEFAULT 0', 'TINYINT NOT NULL DEFAULT 0'],
+];
 
 function mysqlDriver() {
   const mysql = require('mysql2/promise');
@@ -106,6 +125,7 @@ function mysqlDriver() {
     run: async (sql, p) => { const [r] = await pool.query(sql, p); return { id: r.insertId, changes: r.affectedRows }; },
     async init() {
       for (const t of MYSQL_TABLES) await pool.query(`CREATE TABLE IF NOT EXISTS ${t} ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`);
+      for (const [t, c, , d] of NEW_COLUMNS) await this.addColumn(t, c, d);
     },
     async addColumn(table, col, def) {
       const [rows] = await pool.query('SELECT 1 FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name=? AND column_name=?', [table, col]);
@@ -138,6 +158,7 @@ function sqliteDriver() {
         ['referral_partners', 'portal_enabled', 'INTEGER NOT NULL DEFAULT 1'], ['referral_partners', 'last_login', "TEXT NOT NULL DEFAULT ''"],
         ['referral_partners', 'reset_hash', "TEXT NOT NULL DEFAULT ''"], ['referral_partners', 'reset_expires', 'INTEGER NOT NULL DEFAULT 0'],
       ]) await addColumn(t, c, d);
+      for (const [t, c, d] of NEW_COLUMNS) await addColumn(t, c, d);
     },
     addColumn,
     backupTo: (file) => s.backup(file), // a complete copy of the database file

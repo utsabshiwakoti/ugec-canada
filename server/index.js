@@ -103,7 +103,12 @@ app.use((err, req, res, next) => {
 
 (async () => {
   await seedIfEmpty();
+  if (process.env.RESET_2FA) {
+    const r = await db.run("UPDATE users SET totp_on=0, totp_secret='' WHERE email=?", process.env.RESET_2FA.toLowerCase().trim());
+    console.warn(r.changes ? `[start] Two-step sign-in turned off for ${process.env.RESET_2FA}. Remove RESET_2FA from the settings now.` : `[start] RESET_2FA: no admin user ${process.env.RESET_2FA}`);
+  }
   backup.schedule();
+  require('./digest').schedule();
   const port = Number(process.env.PORT || 3000);
   app.listen(port, '0.0.0.0', () => console.log(`UGEC Canada running at http://localhost:${port}  (admin: /admin, database: ${db.dialect})`));
 })().catch((e) => {

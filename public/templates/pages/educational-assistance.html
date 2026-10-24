@@ -1,41 +1,33 @@
-{{> components/page-head kicker="Already in Canada" title="Educational Assistance" lede="Already in Canada on a work permit? We help you move to a study permit and choose the right program. We work with most public DLIs in Canada, with master's programs, undergraduate diplomas and bachelor's degrees available all over Canada."}}
+{{> components/page-head kicker="Already in Canada" title="Educational Assistance" lede=site.pages.edu.lede}}
 
+{{#if site.pages.edu.pathways}}
 <section class="sec tight">
   <div class="wrap">
     <p class="kicker">Study permit pathways</p>
     <h2>We can help with</h2>
     <div class="grid">
+      {{#each site.pages.edu.pathways}}
       <div class="why">
-        <h3>PGWP to study permit</h3>
-        <p>On a Post-Graduation Work Permit and planning to study again? We help you choose a program and prepare your study permit application.</p>
+        <h3>{{title}}</h3>
+        <p>{{text}}</p>
       </div>
-      <div class="why">
-        <h3>LMIA to study permit</h3>
-        <p>Working in Canada on an LMIA-based work permit? We help you find a suitable program and plan your move to a study permit.</p>
-      </div>
-      <div class="why">
-        <h3>SOWP to study permit</h3>
-        <p>On a Spousal Open Work Permit? We help you compare programs and prepare your study permit application.</p>
-      </div>
-      <div class="why">
-        <h3>SOWP-eligible programs</h3>
-        <p>Programs that can allow your spouse or partner to apply for an open work permit while you study.</p>
-      </div>
+      {{/each}}
     </div>
   </div>
 </section>
+{{/if}}
 
 <section class="sec alt">
   <div class="wrap cols two">
     <div>
       <p class="kicker">Programs across Canada</p>
       <h2>Public DLIs, all over Canada</h2>
-      <p>We work with most public designated learning institutions (DLIs) in Canada.</p>
+      {{#if site.pages.edu.dli}}<p>{{site.pages.edu.dli}}</p>{{/if}}
+      {{#if site.pages.edu.levels}}
       <ul class="ruled nocol">
-        <li>Master's programs</li>
-        <li>Undergraduate diplomas</li>
-        <li>Bachelor's degrees</li>
+        {{#each site.pages.edu.levels}}<li>{{this}}</li>{{/each}}
       </ul>
+      {{/if}}
       <p class="mt-s">Looking for a shorter, career-focused course instead? See our <a href="/pr-leading-courses">PR-leading courses</a>.</p>
     </div>
     <div>

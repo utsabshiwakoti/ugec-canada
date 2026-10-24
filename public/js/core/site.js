@@ -11,7 +11,7 @@ export function initSite(site, programs, posts = null, origin = '') {
     booking: BOOKING.map((b) => ({ ...b, href: bookHref(b.key) })),
     waGeneral: WA('Hi UGEC, I would like to ask about programs.'),
     waQuestion: WA('Hi UGEC, I have a question.'),
-    disclaimer: DISCLAIMER,
+    disclaimer: site.settings.disclaimer || DISCLAIMER, // Admin > Site settings > Page text
     year: new Date().getFullYear(),
     origin,
   });

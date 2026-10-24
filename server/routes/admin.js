@@ -7,6 +7,8 @@ const uploads = require('../uploads');
 const backup = require('../backup');
 const mailer = require('../mailer');
 const portal = require('./portal');
+const totp = require('../totp');
+const digest = require('../digest');
 const { asyncRoutes } = require('../async');
 const fs = require('fs');
 
@@ -39,14 +41,26 @@ const slugify = (s) => String(s).toLowerCase().normalize('NFKD').replace(/[^\w\s
 const loginLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 10, standardHeaders: true, legacyHeaders: false,
   message: { error: 'Too many attempts. Try again in a few minutes.' } });
 
+async function signedIn(res, u) {
+  auth.issue(res, u);
+  await db.run('UPDATE users SET last_login=? WHERE id=?', db.now(), u.id);
+  log(u.email, 'signed in');
+  res.json({ ok: true });
+}
 router.post('/login', loginLimiter, async (req, res) => {
   const { email = '', password = '' } = req.body || {};
   const u = await db.get('SELECT * FROM users WHERE email=?', String(email).toLowerCase().trim());
   if (!u || !auth.verifyPassword(String(password), u.password_hash)) return res.status(401).json({ error: 'Email or password is incorrect.' });
-  auth.issue(res, u.id);
-  await db.run('UPDATE users SET last_login=? WHERE id=?', db.now(), u.id);
-  log(u.email, 'signed in');
-  res.json({ ok: true, email: u.email });
+  if (u.totp_on) { auth.issuePending(res, u); return res.json({ need2fa: true }); }
+  await signedIn(res, u);
+});
+router.post('/login/2fa', loginLimiter, async (req, res) => {
+  const u = await auth.pendingUser(req);
+  if (!u) return res.status(401).json({ error: 'Your sign-in timed out. Enter your email and password again.', restart: true });
+  const step = totp.verify(u.totp_secret, (req.body || {}).code, Number(u.totp_last));
+  if (!step) return res.status(401).json({ error: 'That code is not right. Use the newest code in your authenticator app.' });
+  await db.run('UPDATE users SET totp_last=? WHERE id=?', step, u.id);
+  await signedIn(res, u);
 });
 router.post('/logout', (req, res) => { auth.clear(res); res.json({ ok: true }); });
 router.get('/me', async (req, res) => {
@@ -63,25 +77,92 @@ router.use((req, res, next) => {
   next();
 });
 
+const STAFF_OK = [
+  /^GET \/(schema|dashboard|leads|leads\.csv|assignees|account)$/, /^GET \/leads\/\d+(\/events)?$/,
+  /^PATCH \/leads\/\d+$/, /^POST \/leads\/\d+\/(events|contact)$/, /^POST \/leads\/bulk$/,
+  /^POST \/(password|account|2fa\/setup|2fa\/enable|2fa\/disable)$/,
+];
+router.use((req, res, next) => (req.user.admin || STAFF_OK.some((r) => r.test(`${req.method} ${req.path}`)) ? next() : auth.requireAdmin(req, res, next)));
+
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const ROLES = ['admin', 'staff'];
 router.get('/users', async (req, res) => {
-  res.json({ me: req.user.id, users: await db.all('SELECT id, email, created_at, last_login FROM users ORDER BY email') });
+  res.json({ me: req.user.id, users: await db.all('SELECT id, email, name, role, totp_on, created_at, last_login FROM users ORDER BY name, email') });
 });
+router.get('/assignees', async (req, res) => res.json(await db.all("SELECT id, CASE WHEN name != '' THEN name ELSE email END AS name FROM users ORDER BY name")));
 router.post('/users', async (req, res) => {
-  const email = String((req.body || {}).email || '').toLowerCase().trim(), password = String((req.body || {}).password || '');
+  const b = req.body || {};
+  const email = String(b.email || '').toLowerCase().trim(), password = String(b.password || ''), name = String(b.name || '').trim().slice(0, 100);
+  const role = ROLES.includes(b.role) ? b.role : 'staff';
   if (!EMAIL.test(email)) return res.status(400).json({ error: 'Enter a valid email address.' });
   if (password.length < 12) return res.status(400).json({ error: 'The password must be at least 12 characters.' });
   if (await db.get('SELECT 1 FROM users WHERE email=?', email)) return res.status(400).json({ error: 'There is already a login for that email.' });
-  await db.run('INSERT INTO users(email, password_hash, created_at) VALUES(?,?,?)', email, auth.hashPassword(password), db.now());
-  res.locals.activity = `added admin user ${email}`;
+  await db.run('INSERT INTO users(email, name, role, password_hash, created_at) VALUES(?,?,?,?,?)', email, name, role, auth.hashPassword(password), db.now());
+  res.locals.activity = `added ${role} login ${email}`;
   res.status(201).json({ ok: true });
 });
+const adminCount = async () => (await db.get("SELECT COUNT(*) AS c FROM users WHERE role != 'staff'")).c;
+router.patch('/users/:id', async (req, res) => {
+  const b = req.body || {};
+  const u = await db.get('SELECT id, email, name, role FROM users WHERE id=?', req.params.id);
+  if (!u) return res.status(404).json({ error: 'Not found' });
+  if (b.role !== undefined) {
+    if (!ROLES.includes(b.role)) return res.status(400).json({ error: 'Unknown role.' });
+    if (u.id === req.user.id && b.role !== u.role) return res.status(400).json({ error: 'You cannot change your own role. Ask another admin.' });
+    if (u.role !== 'staff' && b.role === 'staff' && (await adminCount()) < 2) return res.status(400).json({ error: 'There must always be at least one admin.' });
+    await db.run('UPDATE users SET role=? WHERE id=?', b.role, u.id);
+    res.locals.activity = `changed ${u.email} to ${b.role}`;
+  }
+  if (b.name !== undefined) await db.run('UPDATE users SET name=? WHERE id=?', String(b.name).trim().slice(0, 100), u.id);
+  if (b.reset2fa) {
+    await db.run("UPDATE users SET totp_on=0, totp_secret='' WHERE id=?", u.id);
+    res.locals.activity = `turned off two-step sign-in for ${u.email}`;
+  }
+  res.json({ ok: true });
+});
 router.delete('/users/:id', async (req, res) => {
-  const u = await db.get('SELECT id, email FROM users WHERE id=?', req.params.id);
+  const u = await db.get('SELECT id, email, role FROM users WHERE id=?', req.params.id);
   if (!u) return res.status(404).json({ error: 'Not found' });
   if (u.id === req.user.id) return res.status(400).json({ error: 'You cannot remove your own login. Ask another admin to do it.' });
+  if (u.role !== 'staff' && (await adminCount()) < 2) return res.status(400).json({ error: 'There must always be at least one admin.' });
+  await db.run('UPDATE leads SET assigned_to=NULL WHERE assigned_to=?', u.id);
   await db.run('DELETE FROM users WHERE id=?', u.id);
-  res.locals.activity = `removed admin user ${u.email}`;
+  res.locals.activity = `removed login ${u.email}`;
+  res.json({ ok: true });
+});
+
+router.get('/account', async (req, res) => res.json(await db.get('SELECT email, name, role, totp_on, digest FROM users WHERE id=?', req.user.id)));
+router.post('/account', async (req, res) => {
+  const b = req.body || {};
+  if (b.name !== undefined) await db.run('UPDATE users SET name=? WHERE id=?', String(b.name).trim().slice(0, 100), req.user.id);
+  if (b.digest !== undefined) await db.run('UPDATE users SET digest=? WHERE id=?', b.digest ? 1 : 0, req.user.id);
+  res.locals.activity = 'updated their account';
+  res.json({ ok: true });
+});
+router.post('/2fa/setup', async (req, res) => {
+  if (req.user.totp_on) return res.status(400).json({ error: 'Two-step sign-in is already on.' });
+  const secret = totp.newSecret();
+  await db.run('UPDATE users SET totp_secret=? WHERE id=?', secret, req.user.id);
+  const qr = await require('qrcode').toDataURL(totp.uri(secret, req.user.email), { margin: 1, width: 220 });
+  res.locals.activity = 'started setting up two-step sign-in';
+  res.json({ secret: secret.replace(/(.{4})/g, '$1 ').trim(), qr });
+});
+router.post('/2fa/enable', async (req, res) => {
+  const u = await db.get('SELECT * FROM users WHERE id=?', req.user.id);
+  if (!u.totp_secret) return res.status(400).json({ error: 'Start again: click "Turn on two-step sign-in".' });
+  const step = totp.verify(u.totp_secret, (req.body || {}).code, 0);
+  if (!step) return res.status(400).json({ error: 'That code is not right. Type the 6-digit code your app shows now.' });
+  await db.run('UPDATE users SET totp_on=1, totp_last=? WHERE id=?', step, u.id);
+  auth.issue(res, { ...u, totp_on: 1 }); // stay signed in on this device
+  res.locals.activity = 'turned on two-step sign-in';
+  res.json({ ok: true });
+});
+router.post('/2fa/disable', async (req, res) => {
+  const u = await db.get('SELECT * FROM users WHERE id=?', req.user.id);
+  if (!auth.verifyPassword(String((req.body || {}).password || ''), u.password_hash)) return res.status(400).json({ error: 'Your password is incorrect.' });
+  await db.run("UPDATE users SET totp_on=0, totp_secret='' WHERE id=?", u.id);
+  auth.issue(res, { ...u, totp_on: 0 });
+  res.locals.activity = 'turned off two-step sign-in';
   res.json({ ok: true });
 });
 router.get('/activity', async (req, res) => res.json(await db.all('SELECT user_email, action, created_at FROM activity ORDER BY id DESC LIMIT 200')));
@@ -108,14 +189,16 @@ router.post('/password', async (req, res) => {
   if (String(next).length < 12) return res.status(400).json({ error: 'New password must be at least 12 characters.' });
   const u = await db.get('SELECT * FROM users WHERE id=?', req.user.id);
   if (!auth.verifyPassword(String(current), u.password_hash)) return res.status(400).json({ error: 'Current password is incorrect.' });
-  await db.run('UPDATE users SET password_hash=? WHERE id=?', auth.hashPassword(String(next)), u.id);
+  const hash = auth.hashPassword(String(next));
+  await db.run('UPDATE users SET password_hash=? WHERE id=?', hash, u.id);
+  auth.issue(res, { ...u, password_hash: hash }); // other devices are signed out; this one stays in
   res.json({ ok: true });
 });
 
 router.get('/schema', (req, res) => {
   const out = {};
   for (const [k, r] of Object.entries(resources)) if (k !== 'settingsFields') out[k] = { label: r.label, id: r.id, idEditable: !!r.idEditable, list: r.list, fields: r.fields };
-  res.json({ resources: out, settingsFields, leadStatuses: LEAD_STATUSES, commissionStatuses: COMMISSION_STATUSES });
+  res.json({ resources: req.user.admin ? out : {}, settingsFields: req.user.admin ? settingsFields : [], leadStatuses: LEAD_STATUSES, commissionStatuses: COMMISSION_STATUSES, user: req.user });
 });
 
 router.get('/settings', async (req, res) => res.json(await db.getSettings()));
@@ -161,7 +244,7 @@ const validImage = (v) => !v || /^\/uploads\/[a-z]+\/[a-f0-9]+\.(jpg|png|webp)$/
 router.put('/settings', async (req, res) => {
   const body = req.body || {}, before = await db.getSettings(), changes = [];
   for (const f of settingsFields) {
-    if (!(f.n in body)) continue;
+    if (!f.n || !(f.n in body)) continue;
     let v = body[f.n];
     if (f.t === 'checkbox') v = v ? '1' : '0';
     if (f.t === 'json' || f.t === 'list' || f.t === 'map') {
@@ -173,6 +256,8 @@ router.put('/settings', async (req, res) => {
       v = String(Math.round(n));
     }
     if (f.t === 'image') { v = String(v ?? '').trim(); if (!validImage(v)) return res.status(400).json({ error: `${f.l.split(' (')[0]} is not a valid image.` }); }
+    if (f.t === 'lines') v = String(v ?? '').split('\n').map((x) => x.trim()).filter(Boolean).join('\n');
+    if (f.t === 'text' || f.t === 'textarea') v = String(v ?? '').trim();
     changes.push([f, v]);
   }
   for (const [f, v] of changes) {
@@ -182,25 +267,53 @@ router.put('/settings', async (req, res) => {
   res.json(await db.getSettings());
 });
 
-const LEAD_SELECT = `SELECT l.*, p.name AS partner_name, p.code AS partner_code FROM leads l LEFT JOIN referral_partners p ON p.id = l.referral_partner_id`;
-function leadQuery(q) {
+const OPEN = "l.status NOT IN ('enrolled','closed')";
+const LEAD_SELECT = `SELECT l.*, p.name AS partner_name, p.code AS partner_code,
+  CASE WHEN u.name != '' THEN u.name ELSE u.email END AS assignee
+  FROM leads l LEFT JOIN referral_partners p ON p.id = l.referral_partner_id LEFT JOIN users u ON u.id = l.assigned_to`;
+function leadQuery(q, user) {
   const where = []; const args = [];
-  if (q.status && q.status !== 'all') { where.push('l.status=?'); args.push(q.status); }
+  if (q.status === 'open') where.push(OPEN);
+  else if (q.status && q.status !== 'all') { where.push('l.status=?'); args.push(q.status); }
   if (q.form && q.form !== 'all') { where.push('l.form_type=?'); args.push(q.form); }
   if (q.partner === 'none') where.push('l.referral_partner_id IS NULL');
   else if (q.partner === 'any') where.push('l.referral_partner_id IS NOT NULL');
   else if (q.partner && q.partner !== 'all') { where.push('l.referral_partner_id=?'); args.push(Number(q.partner) || 0); }
+  if (q.assigned === 'me') { where.push('l.assigned_to=?'); args.push(user.id); }
+  else if (q.assigned === 'none') where.push('l.assigned_to IS NULL');
+  else if (q.assigned && q.assigned !== 'all') { where.push('l.assigned_to=?'); args.push(Number(q.assigned) || 0); }
+  if (q.due === '1') { where.push(`l.follow_up != '' AND l.follow_up <= ? AND ${OPEN}`); args.push(digest.today()); }
+  if (q.ids) { const ids = String(q.ids).split(',').map(Number).filter(Boolean).slice(0, 1000); where.push(`l.id IN (${ids.map(() => '?').join(',') || 'NULL'})`); args.push(...ids); }
   if (q.q) { where.push('(l.name LIKE ? OR l.email LIKE ? OR l.phone LIKE ? OR l.program LIKE ? OR l.data LIKE ? OR p.name LIKE ? OR l.referral_other LIKE ?)'); const l = `%${q.q}%`; args.push(l, l, l, l, l, l, l); }
   return { sql: LEAD_SELECT + (where.length ? ' WHERE ' + where.join(' AND ') : '') + ' ORDER BY l.created_at DESC, l.id DESC', args };
 }
+const forRole = (user, r) => (user.admin ? r : (({ commission_status, commission_amount, ...rest }) => rest)(r));
+const phoneKey = (p) => String(p || '').replace(/\D/g, '').slice(-10);
+async function duplicates() {
+  const by = new Map();
+  for (const r of await db.all('SELECT id, email, phone FROM leads')) {
+    for (const k of [r.email && 'e:' + r.email.toLowerCase().trim(), phoneKey(r.phone).length >= 7 && 'p:' + phoneKey(r.phone)]) {
+      if (k) by.set(k, [...(by.get(k) || []), r.id]);
+    }
+  }
+  return (r) => [...new Set([r.email && 'e:' + r.email.toLowerCase().trim(), phoneKey(r.phone).length >= 7 && 'p:' + phoneKey(r.phone)]
+    .filter(Boolean).flatMap((k) => by.get(k) || []))].filter((id) => id !== r.id);
+}
 router.get('/leads', async (req, res) => {
-  const { sql, args } = leadQuery(req.query);
-  const rows = (await db.all(sql + ' LIMIT 500', ...args)).map((r) => ({ ...r, data: JSON.parse(r.data || '{}') }));
+  const { sql, args } = leadQuery(req.query, req.user);
+  const dupes = await duplicates();
+  const rows = (await db.all(sql + ' LIMIT 500', ...args)).map((r) => forRole(req.user, { ...r, data: JSON.parse(r.data || '{}'), dupes: dupes(r) }));
   const counts = await db.all('SELECT status, COUNT(*) AS c FROM leads GROUP BY status');
-  res.json({ rows, counts, forms: await db.all('SELECT type, title FROM forms ORDER BY type'), partners: await db.all('SELECT id, name FROM referral_partners ORDER BY name') });
+  res.json({ rows, counts, today: digest.today(), forms: await db.all('SELECT type, title FROM forms ORDER BY type'),
+    partners: req.user.admin ? await db.all('SELECT id, name FROM referral_partners ORDER BY name') : [] });
+});
+router.get('/leads/:id(\\d+)', async (req, res) => {
+  const r = await db.get(LEAD_SELECT + ' WHERE l.id=?', req.params.id);
+  if (!r) return res.status(404).json({ error: 'This lead no longer exists.' });
+  res.json(forRole(req.user, { ...r, data: JSON.parse(r.data || '{}'), dupes: (await duplicates())(r) }));
 });
 router.get('/leads.csv', async (req, res) => {
-  const { sql, args } = leadQuery(req.query);
+  const { sql, args } = leadQuery(req.query, req.user);
   const rows = await db.all(sql, ...args);
   const cell = (v) => {
     let s = String(v ?? '');
@@ -208,14 +321,51 @@ router.get('/leads.csv', async (req, res) => {
     return `"${s.replace(/"/g, '""')}"`;
   };
   const keys = [...new Set(rows.flatMap((r) => Object.keys(JSON.parse(r.data || '{}'))))];
-  const head = ['id', 'date (UTC)', 'form', 'status', 'name', 'email', 'phone', 'program', 'referral partner', 'referral code', 'referral method', 'referral other', 'commission status', 'commission amount', ...keys.map((k) => 'field: ' + k), 'notes'];
+  const money = req.user.admin;
+  const head = ['id', 'date (UTC)', 'form', 'status', 'assigned to', 'follow-up', 'paid', 'name', 'email', 'phone', 'program', 'referral partner', 'referral code', 'referral method', 'referral other',
+    ...(money ? ['commission status', 'commission amount'] : []), ...keys.map((k) => 'field: ' + k), 'notes'];
   const lines = [head.map(cell).join(',')];
   for (const r of rows) {
     const d = JSON.parse(r.data || '{}');
-    lines.push([r.id, r.created_at, r.form_type, r.status, r.name, r.email, r.phone, r.program, r.partner_name, r.partner_code, r.referral_method, r.referral_other, r.commission_status, r.commission_amount, ...keys.map((k) => d[k] ?? ''), r.notes].map(cell).join(','));
+    lines.push([r.id, r.created_at, r.form_type, r.status, r.assignee, r.follow_up, r.paid ? 'yes' : '', r.name, r.email, r.phone, r.program, r.partner_name, r.partner_code, r.referral_method, r.referral_other,
+      ...(money ? [r.commission_status, r.commission_amount] : []), ...keys.map((k) => d[k] ?? ''), r.notes].map(cell).join(','));
   }
   res.set({ 'Content-Type': 'text/csv; charset=utf-8', 'Content-Disposition': `attachment; filename="ugec-leads-${new Date().toISOString().slice(0, 10)}.csv"` });
-  res.send('﻿' + lines.join('\r\n'));
+  res.send('\ufeff' + lines.join('\r\n'));
+});
+
+router.get('/dashboard', async (req, res) => {
+  const today = digest.today(), me = req.user.id;
+  const one = async (sql, ...a) => (await db.get(sql, ...a)).c;
+  const since = new Date(Date.now() - 7 * 864e5).toISOString().replace('T', ' ').slice(0, 19);
+  const since90 = new Date(Date.now() - 90 * 864e5).toISOString().replace('T', ' ').slice(0, 19);
+  const start = new Date(); start.setUTCHours(0, 0, 0, 0); start.setUTCDate(start.getUTCDate() - ((start.getUTCDay() + 6) % 7) - 7 * 11);
+  const weeks = Array.from({ length: 12 }, (_, i) => ({ start: new Date(start.getTime() + i * 7 * 864e5).toISOString().slice(0, 10), count: 0 }));
+  for (const r of await db.all('SELECT created_at FROM leads WHERE created_at >= ?', start.toISOString().replace('T', ' ').slice(0, 19))) {
+    const i = Math.floor((new Date(r.created_at.replace(' ', 'T') + 'Z') - start) / (7 * 864e5));
+    if (weeks[i]) weeks[i].count++;
+  }
+  const L = 'SELECT COUNT(*) AS c FROM leads l WHERE ';
+  res.json({
+    today,
+    totals: {
+      fresh: await one(L + "l.status='new'"),
+      unassigned: await one(L + "l.status='new' AND l.assigned_to IS NULL"),
+      week: await one(L + 'l.created_at >= ?', since),
+      open: await one(L + OPEN),
+      due: await one(L + `l.follow_up != '' AND l.follow_up <= ? AND ${OPEN}`, today),
+      myDue: await one(L + `l.assigned_to=? AND l.follow_up != '' AND l.follow_up <= ? AND ${OPEN}`, me, today),
+      mine: await one(L + `l.assigned_to=? AND ${OPEN}`, me),
+      total90: await one(L + 'l.created_at >= ?', since90),
+      enrolled90: await one(L + "l.status='enrolled' AND l.created_at >= ?", since90),
+    },
+    weeks,
+    byStatus: await db.all('SELECT status, COUNT(*) AS c FROM leads GROUP BY status'),
+    byForm: await db.all('SELECT l.form_type AS type, COALESCE(f.title, l.form_type) AS title, COUNT(*) AS c FROM leads l LEFT JOIN forms f ON f.type = l.form_type WHERE l.created_at >= ? GROUP BY l.form_type, f.title ORDER BY c DESC', since90),
+    byPartner: req.user.admin ? await db.all('SELECT p.name, COUNT(*) AS c FROM leads l JOIN referral_partners p ON p.id = l.referral_partner_id WHERE l.created_at >= ? GROUP BY p.id, p.name ORDER BY c DESC LIMIT 6', since90) : [],
+    followUps: await db.all(`${LEAD_SELECT} WHERE l.follow_up != '' AND l.follow_up <= ? AND ${OPEN} ORDER BY l.follow_up, l.id LIMIT 50`, today),
+    recent: await db.all(`${LEAD_SELECT} ORDER BY l.created_at DESC, l.id DESC LIMIT 6`),
+  });
 });
 
 router.get('/referrals/summary', async (req, res) => {
@@ -246,28 +396,97 @@ router.post('/partners/:id/invite', async (req, res) => {
   res.locals.activity = `sent a portal sign-in invite to referral partner "${p.name}"`;
   res.json({ ok: true, link, emailed, email: p.email });
 });
+const event = (leadId, email, kind, text) => db.run('INSERT INTO lead_events(lead_id, user_email, kind, text, created_at) VALUES(?,?,?,?,?)', leadId, email, kind, String(text).slice(0, 4000), db.now());
+router.get('/leads/:id/events', async (req, res) => res.json(await db.all('SELECT user_email, kind, text, created_at FROM lead_events WHERE lead_id=? ORDER BY id DESC', req.params.id)));
+const DATE = /^\d{4}-\d{2}-\d{2}$/;
+async function updateLead(user, id, b) {
+  const cur = await db.get('SELECT * FROM leads WHERE id=?', id);
+  if (!cur) throw Object.assign(new Error('Not found'), { status: 404 });
+  const next = {}, log = [];
+  if (b.status !== undefined && b.status !== cur.status) {
+    if (!LEAD_STATUSES.includes(b.status)) throw new Error('Unknown status.');
+    next.status = b.status; log.push(['status', `Status: ${cur.status} → ${b.status}`]);
+  }
+  if (b.assigned_to !== undefined) {
+    const to = b.assigned_to ? Number(b.assigned_to) : null;
+    if (to !== cur.assigned_to) {
+      const u = to && await db.get("SELECT CASE WHEN name != '' THEN name ELSE email END AS name FROM users WHERE id=?", to);
+      if (to && !u) throw new Error('Unknown team member.');
+      next.assigned_to = to; log.push(['assign', to ? `Assigned to ${u.name}` : 'Unassigned']);
+    }
+  }
+  if (b.follow_up !== undefined && String(b.follow_up) !== cur.follow_up) {
+    const d = String(b.follow_up || '');
+    if (d && !DATE.test(d)) throw new Error('Follow-up date is not valid.');
+    next.follow_up = d; log.push(['follow', d ? `Follow-up set for ${d}` : 'Follow-up cleared']);
+  }
+  if (b.paid !== undefined && (b.paid ? 1 : 0) !== cur.paid) { next.paid = b.paid ? 1 : 0; log.push(['paid', b.paid ? 'Marked as paid' : 'Marked as not paid']); }
+  if (user.admin) {
+    if (b.referral_partner_id !== undefined) {
+      const pid = b.referral_partner_id ? Number(b.referral_partner_id) : null;
+      if (pid !== cur.referral_partner_id) {
+        const p = pid && await db.get('SELECT name FROM referral_partners WHERE id=?', pid);
+        if (pid && !p) throw new Error('Unknown partner.');
+        next.referral_partner_id = pid; log.push(['partner', pid ? `Referral partner set to ${p.name}` : 'Referral partner removed']);
+      }
+    }
+    if (b.commission_status !== undefined && b.commission_status !== cur.commission_status) {
+      if (!COMMISSION_STATUSES.includes(b.commission_status)) throw new Error('Unknown commission status.');
+      next.commission_status = b.commission_status; log.push(['commission', `Commission: ${b.commission_status}`]);
+    }
+    if (b.commission_amount !== undefined && b.commission_amount !== '' && Number(b.commission_amount) !== Number(cur.commission_amount)) {
+      const amount = Number(b.commission_amount);
+      if (!Number.isFinite(amount) || amount < 0) throw new Error('Commission amount must be a number, 0 or more.');
+      next.commission_amount = amount; log.push(['commission', `Commission amount: $${amount.toFixed(2)}`]);
+    }
+  }
+  if (b.notes !== undefined) next.notes = String(b.notes).slice(0, 4000);
+  const cols = Object.keys(next);
+  if (cols.length) await db.run(`UPDATE leads SET ${cols.map((c) => `${c}=?`).join(', ')} WHERE id=?`, ...cols.map((c) => next[c]), id);
+  for (const [kind, text] of log) await event(id, user.email, kind, text);
+  if (String(b.note || '').trim()) await event(id, user.email, 'note', String(b.note).trim());
+}
 router.patch('/leads/:id', async (req, res) => {
-  const b = req.body || {};
-  const cur = await db.get('SELECT * FROM leads WHERE id=?', req.params.id);
-  if (!cur) return res.status(404).json({ error: 'Not found' });
-  if (b.status !== undefined && !LEAD_STATUSES.includes(b.status)) return res.status(400).json({ error: 'Unknown status.' });
-  if (b.commission_status !== undefined && !COMMISSION_STATUSES.includes(b.commission_status)) return res.status(400).json({ error: 'Unknown commission status.' });
-  let amount = cur.commission_amount;
-  if (b.commission_amount !== undefined && b.commission_amount !== '') {
-    amount = Number(b.commission_amount);
-    if (!Number.isFinite(amount) || amount < 0) return res.status(400).json({ error: 'Commission amount must be a number, 0 or more.' });
-  }
-  let pid = cur.referral_partner_id;
-  if (b.referral_partner_id !== undefined) {
-    pid = b.referral_partner_id ? Number(b.referral_partner_id) : null;
-    if (pid && !(await db.get('SELECT 1 FROM referral_partners WHERE id=?', pid))) return res.status(400).json({ error: 'Unknown partner.' });
-  }
-  await db.run('UPDATE leads SET status=?, notes=?, commission_status=?, commission_amount=?, referral_partner_id=? WHERE id=?',
-    b.status ?? cur.status, b.notes !== undefined ? String(b.notes).slice(0, 4000) : cur.notes,
-    b.commission_status ?? cur.commission_status, amount, pid, cur.id);
+  try { await updateLead(req.user, Number(req.params.id), req.body || {}); res.json({ ok: true }); }
+  catch (e) { res.status(e.status || 400).json({ error: e.message }); }
+});
+router.post('/leads/:id/events', async (req, res) => {
+  const text = String((req.body || {}).text || '').trim();
+  if (!text) return res.status(400).json({ error: 'Write a note first.' });
+  if (!(await db.get('SELECT 1 FROM leads WHERE id=?', req.params.id))) return res.status(404).json({ error: 'Not found' });
+  await event(Number(req.params.id), req.user.email, 'note', text);
+  res.locals.activity = `added a note to lead #${req.params.id}`;
   res.json({ ok: true });
 });
-router.delete('/leads/:id', async (req, res) => { await db.run('DELETE FROM leads WHERE id=?', req.params.id); res.json({ ok: true }); });
+const VIA = { whatsapp: 'Opened WhatsApp to message them', email: 'Started an email to them', call: 'Called them' };
+router.post('/leads/:id/contact', async (req, res) => {
+  const via = VIA[(req.body || {}).via];
+  if (!via) return res.status(400).json({ error: 'Bad request' });
+  if (!(await db.get('SELECT 1 FROM leads WHERE id=?', req.params.id))) return res.status(404).json({ error: 'Not found' });
+  await event(Number(req.params.id), req.user.email, 'contact', via);
+  res.locals.activity = `contacted lead #${req.params.id} (${req.body.via})`;
+  res.json({ ok: true });
+});
+router.post('/leads/bulk', async (req, res) => {
+  const b = req.body || {};
+  const ids = [...new Set((Array.isArray(b.ids) ? b.ids : []).map(Number).filter(Boolean))].slice(0, 500);
+  if (!ids.length) return res.status(400).json({ error: 'Select some leads first.' });
+  const ACT = { status: 'status', assign: 'assigned_to', follow: 'follow_up' };
+  if (b.action === 'delete') {
+    if (!req.user.admin) return res.status(403).json({ error: 'Only admins can delete leads.' });
+    for (const id of ids) { await db.run('DELETE FROM lead_events WHERE lead_id=?', id); await db.run('DELETE FROM leads WHERE id=?', id); }
+  } else if (ACT[b.action]) {
+    try { for (const id of ids) await updateLead(req.user, id, { [ACT[b.action]]: b.value }); }
+    catch (e) { return res.status(e.status || 400).json({ error: e.message }); }
+  } else return res.status(400).json({ error: 'Unknown action.' });
+  res.locals.activity = `${b.action === 'delete' ? 'deleted' : 'updated'} ${ids.length} lead${ids.length === 1 ? '' : 's'} at once (${b.action})`;
+  res.json({ ok: true, count: ids.length });
+});
+router.delete('/leads/:id', async (req, res) => {
+  await db.run('DELETE FROM lead_events WHERE lead_id=?', req.params.id);
+  await db.run('DELETE FROM leads WHERE id=?', req.params.id);
+  res.json({ ok: true });
+});
 
 router.post('/uploads/:folder', express.raw({ type: ['image/jpeg', 'image/png', 'image/webp'], limit: uploads.MAX_BYTES }), (req, res) => {
   try { res.status(201).json({ url: uploads.save(req.params.folder, req.body) }); }

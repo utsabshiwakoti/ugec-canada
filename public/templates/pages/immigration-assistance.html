@@ -1,34 +1,32 @@
-{{> components/page-head title="Professional Immigration Assistance" lede="Help with your immigration applications, provided with a Regulated Canadian Immigration Consultant (RCIC)."}}
+{{> components/page-head title="Professional Immigration Assistance" lede=site.pages.imm.lede}}
 
 <section class="sec tight">
   <div class="wrap cols two">
+    {{#if site.pages.imm.filing}}
     <div>
       <p class="kicker">What we do</p>
       <h2>Application filing</h2>
       <ul class="ruled nocol">
-        <li>PGWP filing</li>
-        <li>SOWP filing</li>
-        <li>PR filing</li>
-        <li>All PNP filing</li>
-        <li>RCIP filing</li>
-        <li>AIP filing</li>
+        {{#each site.pages.imm.filing}}<li>{{this}}</li>{{/each}}
       </ul>
     </div>
+    {{/if}}
+    {{#if site.pages.imm.study}}
     <div>
       <p class="kicker">Study permits</p>
       <h2>Study permit filing</h2>
       <ul class="ruled nocol">
-        <li>PGWP to study permit</li>
-        <li>LMIA to study permit</li>
+        {{#each site.pages.imm.study}}<li>{{this}}</li>{{/each}}
       </ul>
-      <p class="mt-s">We work with most public DLIs in Canada. Master's programs, undergraduate diplomas and bachelor's degrees are available all over Canada.</p>
+      {{#if site.pages.imm.dli}}<p class="mt-s">{{site.pages.imm.dli}}</p>{{/if}}
     </div>
+    {{/if}}
   </div>
 </section>
 
 <section class="sec alt">
   <div class="wrap">
-    <div class="note"><p><strong>Disclaimer:</strong> UGEC does not guarantee approval, and UGEC does not give regulated immigration advice itself. Our immigration assistance is provided with <strong>{{site.rcic.name}}</strong>, {{site.rcic.title}}{{#if site.rcic.licence}} (licence no. {{site.rcic.licence}}){{/if}}. Decisions are made by the Government of Canada.</p></div>
+    <div class="note"><p><strong>Disclaimer:</strong> {{site.pages.imm.disclaimer}} Our immigration assistance is provided with <strong>{{site.rcic.name}}</strong>, {{site.rcic.title}}{{#if site.rcic.licence}} (licence no. {{site.rcic.licence}}){{/if}}.</p></div>
     <div class="btns">
       <a class="btn btn-red" href="/book-consultation?type=immigration">Book an immigration consultation</a>
       <a class="btn btn-wa" href="{{waQuestion}}" target="_blank" rel="noopener">WhatsApp UGEC</a>

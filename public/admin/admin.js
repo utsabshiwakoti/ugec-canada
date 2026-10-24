@@ -2,7 +2,7 @@
 const $ = (s, r = document) => r.querySelector(s);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const root = $('#root');
-let schema = null, me = null, tab = 'leads', flash = null;
+let schema = null, me = null, tab = 'dashboard', flash = null;
 
 async function api(path, opt = {}) {
   const r = await fetch('/admin/api' + path, { credentials: 'same-origin', ...opt,
@@ -174,127 +174,317 @@ const newScreen = () => { const n = ++screenNo; return () => n === screenNo; };
 const msg = () => { const m = flash; flash = null; return m ? `<div class="msg ${m.t}" role="status">${esc(m.m)}</div>` : ''; };
 const say = (m, t = 'ok') => { flash = { m, t }; };
 
-function login(error) {
-  root.innerHTML = `<form class="login" id="lf"><h1>UGEC Canada admin</h1>${error ? `<div class="msg err">${esc(error)}</div>` : ''}
-    <label for="e">Email</label><input id="e" type="email" autocomplete="username" required>
-    <label for="p">Password</label><input id="p" type="password" autocomplete="current-password" required>
-    <p><button class="b" style="width:100%;margin-top:14px">Sign in</button></p></form>`;
+const when = (s) => (s ? new Date(s.replace(' ', 'T') + 'Z').toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' }) : 'never');
+const shortWhen = (s) => (s ? new Date(s.replace(' ', 'T') + 'Z').toLocaleDateString([], { month: 'short', day: 'numeric' }) : '');
+const day = (d) => (d ? new Date(d + 'T12:00:00').toLocaleDateString([], { month: 'short', day: 'numeric' }) : '');
+const addDays = (d, n) => { const x = new Date(d + 'T12:00:00'); x.setDate(x.getDate() + n); return x.toISOString().slice(0, 10); };
+const plural = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`;
+const money = (n) => '$' + Number(n || 0).toFixed(2);
+const ICONS = {
+  grid: 'M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z', inbox: 'M4 13h4l2 3h4l2-3h4M5.5 5h13l1.5 8v6H4v-6z',
+  users: 'M16 19v-1a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v1M9.5 10.5a3.25 3.25 0 1 0 0-6.5 3.25 3.25 0 0 0 0 6.5M21 19v-1a4 4 0 0 0-3-3.9M16 4.1a3.25 3.25 0 0 1 0 6.3',
+  link: 'M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1',
+  book: 'M5 4.5A1.5 1.5 0 0 1 6.5 3H19v15H6.5A1.5 1.5 0 0 0 5 19.5zM5 19.5A1.5 1.5 0 0 0 6.5 21H19',
+  building: 'M4 21h16M6 21V5l6-2 6 2v16M10 21v-4h4v4M9 8h.01M12 8h.01M15 8h.01M9 12h.01M12 12h.01M15 12h.01',
+  pen: 'M4 20h4L19 9l-4-4L4 16zM13.5 6.5l4 4', card: 'M3 6h18v12H3zM9 11a2 2 0 1 0 0-4 2 2 0 0 0 0 4M5.5 16a3.5 3.5 0 0 1 7 0M15 10h3M15 14h3',
+  list: 'M9 6h11M9 12h11M9 18h11M4.5 6h.01M4.5 12h.01M4.5 18h.01', sliders: 'M4 6h9M17 6h3M4 12h3M11 12h9M4 18h11M19 18h1M15 4v4M9 10v4M17 16v4',
+  shield: 'M12 3l8 3v6c0 4.8-3.4 8-8 9-4.6-1-8-4.2-8-9V6z', user: 'M19 20v-1a5 5 0 0 0-5-5h-4a5 5 0 0 0-5 5v1M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8',
+  out: 'M14 4h5v16h-5M10 8l-4 4 4 4M6 12h11', ext: 'M14 4h6v6M20 4l-9 9M18 14v6H4V6h6', menu: 'M4 7h16M4 12h16M4 17h16', x: 'M6 6l12 12M18 6L6 18',
+  chat: 'M4.5 19.5l1.3-3.6A7.5 7.5 0 1 1 8.6 18.4z', mail: 'M3.5 6h17v12h-17zM4 7l8 6 8-6',
+  phone: 'M5 4h3.5l2 5-2.3 1.4a11 11 0 0 0 5.4 5.4L15 13.5l5 2V19a2 2 0 0 1-2 2A15 15 0 0 1 3 6a2 2 0 0 1 2-2',
+  download: 'M12 4v11M7 10l5 5 5-5M5 20h14', plus: 'M12 5v14M5 12h14',
+};
+const icon = (n) => `<svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="${ICONS[n]}"/></svg>`;
+const STATUS_CLASS = { new: 'new', contacted: 'contacted', 'consultation booked': 'booked', applied: 'applied', enrolled: 'enrolled', closed: 'closed' };
+const cap = (s) => String(s).charAt(0).toUpperCase() + String(s).slice(1);
+const statusBadge = (s) => `<span class="badge st-${STATUS_CLASS[s] || 'closed'}">${esc(s)}</span>`;
+function followBadge(d, today) {
+  if (!d) return '<span class="muted">-</span>';
+  if (d < today) return `<span class="badge due-late">Overdue · ${esc(day(d))}</span>`;
+  if (d === today) return '<span class="badge due-today">Today</span>';
+  return `<span class="badge">${esc(day(d))}</span>`;
+}
+const initials = (s) => String(s || '?').trim().split(/[\s@.]+/).filter(Boolean).slice(0, 2).map((w) => w[0].toUpperCase()).join('') || '?';
+
+function login(error, step2 = false) {
+  root.innerHTML = `<div class="login-wrap"><form class="login" id="lf" novalidate>
+    <div class="login-brand"><span class="mk">U</span><div><b>UGEC Canada</b><small>Admin panel</small></div></div>
+    <h1>${step2 ? 'Enter your code' : 'Sign in'}</h1>
+    <p class="muted">${step2 ? 'Open your authenticator app and type the 6-digit code for UGEC Canada.' : 'Use the email and password for your admin login.'}</p>
+    ${error ? `<div class="msg err" role="alert">${esc(error)}</div>` : ''}
+    ${step2
+      ? '<label for="code">6-digit code</label><input id="code" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9 ]{6,7}" maxlength="7" required autofocus>'
+      : `<label for="e">Email</label><input id="e" type="email" autocomplete="username" required autofocus>
+         <label for="p">Password</label><input id="p" type="password" autocomplete="current-password" required>`}
+    <button class="b block" type="submit">${step2 ? 'Verify and sign in' : 'Sign in'}</button>
+    ${step2 ? '<button class="b ghost block" type="button" id="back1">Back</button>' : ''}</form></div>`;
+  if (step2) $('#back1').onclick = () => login();
   $('#lf').onsubmit = async (ev) => {
     ev.preventDefault();
-    try { me = await api('/login', { method: 'POST', body: { email: $('#e').value, password: $('#p').value } }); await boot(); }
-    catch (x) { login(x.message); }
+    const btn = ev.target.querySelector('[type=submit]'); btn.disabled = true;
+    try {
+      if (step2) { await api('/login/2fa', { method: 'POST', body: { code: $('#code').value } }); return await boot(); }
+      const r = await api('/login', { method: 'POST', body: { email: $('#e').value, password: $('#p').value } });
+      if (r.need2fa) return login('', true);
+      await boot();
+    } catch (x) { login(x.message, step2 && !/timed out/.test(x.message)); }
   };
 }
 
-const TABS = () => [['leads', 'Leads'], ['referrals', 'Referrals'], ...Object.entries(schema.resources).map(([k, r]) => [k, r.label]), ['settings', 'Site settings'], ['users', 'Admin users'], ['account', 'Account']];
-const when = (s) => (s ? new Date(s.replace(' ', 'T') + 'Z').toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' }) : 'never');
-function shell(inner) {
-  root.innerHTML = `<div class="shell"><aside><h1>UGEC admin</h1><nav>${TABS().map(([k, l]) => `<button data-tab="${k}" aria-current="${k === tab}">${esc(l)}</button>`).join('')}</nav>
-   <div class="who">${esc(me.email)}</div><nav><button id="out">Sign out</button><button id="view">View site</button></nav></aside><main>${msg()}${inner}</main></div>`;
-  root.querySelectorAll('[data-tab]').forEach((b) => (b.onclick = () => { tab = b.dataset.tab; draw(); }));
-  $('#out').onclick = async () => { await api('/logout', { method: 'POST' }); me = null; login(); };
+const RES_ICON = { programs: 'book', providers: 'building', posts: 'pen', team: 'card', forms: 'list', partners: 'link' };
+function navGroups() {
+  const admin = schema.user.admin, res = (k) => (schema.resources[k] ? [[k, schema.resources[k].label, RES_ICON[k] || 'list']] : []);
+  return [
+    ['', [['dashboard', 'Dashboard', 'grid']]],
+    ['Clients', [['leads', 'Leads', 'inbox'], ...(admin ? [['referrals', 'Referrals', 'users'], ...res('partners')] : [])]],
+    ...(admin ? [['Website', [...res('programs'), ...res('providers'), ...res('posts'), ...res('team'), ...res('forms'), ['settings', 'Site settings', 'sliders']]]] : []),
+    ['Administration', [...(admin ? [['users', 'Team & security', 'shield']] : []), ['account', 'My account', 'user']]],
+  ];
+}
+let dirty = false; // unsaved changes on the screen (Site settings)
+const leave = () => !dirty || confirm('You have unsaved changes. Leave without saving?');
+function shell(inner, { title = '', actions = '', sub = '' } = {}) {
+  dirty = false;
+  const u = schema.user;
+  root.innerHTML = `<div class="app">
+   <aside class="side" id="side"><div class="side-brand"><span class="mk">U</span><div><b>UGEC Canada</b><small>Admin panel</small></div></div>
+    <nav aria-label="Admin sections">${navGroups().map(([g, items]) => `${g ? `<p class="nav-h">${esc(g)}</p>` : ''}${items.map(([k, l, ic]) => `<button data-tab="${k}"${k === tab ? ' aria-current="page"' : ''}>${icon(ic)}<span>${esc(l)}</span></button>`).join('')}`).join('')}</nav>
+    <div class="side-foot"><div class="me"><span class="av">${esc(initials(u.name || u.email))}</span><div><b>${esc(u.name || u.email)}</b><small>${u.admin ? 'Admin' : 'Staff'}</small></div></div>
+     <button id="view">${icon('ext')}<span>View website</span></button><button id="out">${icon('out')}<span>Sign out</span></button></div></aside>
+   <div class="side-back" id="sideback"></div>
+   <div class="main"><header class="top"><button class="menu" id="menu" aria-label="Menu" aria-controls="side" aria-expanded="false">${icon('menu')}</button>
+    <div class="top-t"><h1>${esc(title)}</h1>${sub ? `<p>${sub}</p>` : ''}</div><div class="top-a">${actions}</div></header>
+    <main class="content">${msg()}${inner}</main></div></div>`;
+  root.querySelectorAll('[data-tab]').forEach((b) => (b.onclick = () => { if (!leave()) return; tab = b.dataset.tab; closeDrawer(); draw(); }));
+  const side = $('#side'), menu = $('#menu'), toggle = (o) => { side.classList.toggle('open', o); menu.setAttribute('aria-expanded', String(o)); };
+  menu.onclick = () => toggle(!side.classList.contains('open')); $('#sideback').onclick = () => toggle(false);
+  $('#out').onclick = async () => { if (!leave()) return; await api('/logout', { method: 'POST' }); me = null; closeDrawer(); login(); };
   $('#view').onclick = () => window.open('/', '_blank');
 }
-async function boot() { schema = await api('/schema'); draw(); }
+async function boot() { schema = await api('/schema'); me = schema.user; if (!me.admin && !['dashboard', 'leads', 'account'].includes(tab)) tab = 'dashboard'; draw(); }
 async function draw() {
   try {
+    if (tab === 'dashboard') return await dashboard();
     if (tab === 'leads') return await leads();
     if (tab === 'referrals') return await referrals();
     if (tab === 'settings') return await settings();
     if (tab === 'users') return await users();
-    if (tab === 'account') return account();
+    if (tab === 'account') return await account();
     return await list(tab);
-  } catch (x) { if (x.message !== 'Signed out') { say(x.message, 'err'); shell('<p>Could not load this section.</p>'); } }
+  } catch (x) { if (x.message !== 'Signed out') { say(x.message, 'err'); shell('<div class="card">Could not load this section. Try again in a moment.</div>', { title: 'Something went wrong' }); } }
+}
+window.addEventListener('beforeunload', (e) => { if (dirty) { e.preventDefault(); e.returnValue = ''; } });
+
+const niceMax = (m) => { const p = 10 ** Math.floor(Math.log10(Math.max(1, m))); return [1, 2, 5, 10].map((k) => k * p).find((v) => v >= m); };
+function weekChart(weeks) {
+  const top = niceMax(Math.max(1, ...weeks.map((w) => w.count)));
+  const label = (w) => `Week of ${day(w.start)}`;
+  return `<div class="vchart"><div class="vgrid" aria-hidden="true">${[top, top / 2, 0].map((v) => `<span><i>${Number.isInteger(v) ? v : v.toFixed(1)}</i></span>`).join('')}</div>
+    <div class="vbars" role="list" aria-label="Leads per week, last 12 weeks">${weeks.map((w) => `<div class="vb" role="listitem" tabindex="0" aria-label="${esc(label(w))}: ${plural(w.count, 'lead')}">
+      <span class="vfill${w.count ? '' : ' zero'}" style="height:${(w.count / top) * 100}%"></span><span class="tip"><b>${plural(w.count, 'lead')}</b>${esc(label(w))}</span></div>`).join('')}</div>
+    <div class="vlabels" aria-hidden="true">${weeks.map((w, i) => `<span>${i % 3 === 0 || i === weeks.length - 1 ? esc(day(w.start)) : ''}</span>`).join('')}</div></div>
+    <details class="astable"><summary>Show as a table</summary><table><thead><tr><th>Week starting</th><th>Leads</th></tr></thead><tbody>${weeks.map((w) => `<tr><td>${esc(day(w.start))}</td><td>${w.count}</td></tr>`).join('')}</tbody></table></details>`;
+}
+function hbars(rows, empty) {
+  if (!rows.length) return `<p class="muted">${esc(empty)}</p>`;
+  const top = Math.max(1, ...rows.map((r) => r.value));
+  return `<ul class="hbars">${rows.map((r) => `<li><span class="hl">${esc(r.label)}</span><span class="ht"><span class="hf" style="width:${Math.max(2, (r.value / top) * 100)}%"></span></span><span class="hv">${r.value}</span></li>`).join('')}</ul>`;
+}
+async function dashboard() {
+  const current = newScreen();
+  const d = await api('/dashboard');
+  if (!current()) return;
+  const t = d.totals, u = schema.user, hour = new Date().getHours();
+  const hello = `Good ${hour < 12 ? 'morning' : hour < 18 ? 'afternoon' : 'evening'}${u.name ? ', ' + esc(u.name.split(/\s+/)[0]) : ''}`;
+  const rate = t.total90 ? Math.round((t.enrolled90 / t.total90) * 100) : 0;
+  const tile = (n, l, sub, go, cls = '') => `<button class="stat ${cls}" data-go="${go}"><span class="stat-n">${n}</span><span class="stat-l">${l}</span><span class="stat-s">${sub}</span></button>`;
+  const leadRow = (r, extra) => `<tr><td><button class="linkish" data-lead="${r.id}"><b>${esc(r.name || r.email || 'Lead #' + r.id)}</b></button></td>${extra(r)}</tr>`;
+  const statusOrder = schema.leadStatuses.map((s) => ({ label: s, value: (d.byStatus.find((x) => x.status === s) || { c: 0 }).c }));
+  shell(`${!u.totp_on ? `<div class="notice">${icon('shield')}<div><b>Protect your login with two-step sign-in.</b> The admin panel holds clients' personal details. It takes two minutes with a free app like Google Authenticator.</div><button class="b sm" data-goto="account">Set it up</button></div>` : ''}
+    <div class="stats">
+      ${tile(t.fresh, 'New leads', t.unassigned ? `${t.unassigned} not assigned yet` : 'All assigned', 'new', t.unassigned ? 'hot' : '')}
+      ${tile(t.due, 'Follow-ups due', `${t.myDue} of them yours`, 'due', t.due ? 'warn' : '')}
+      ${tile(t.week, 'Leads this week', 'Last 7 days', 'all')}
+      ${tile(t.mine, 'Your open leads', 'Assigned to you', 'mine')}
+      ${tile(rate + '%', 'Enrolled', `${t.enrolled90} of ${t.total90} leads, last 90 days`, 'enrolled')}
+    </div>
+    <div class="dgrid"><div class="dcol">
+      <section class="card"><div class="card-h"><h2>Follow-ups due</h2><button class="b ghost sm" data-go="due">See all</button></div>
+        ${d.followUps.length ? `<div class="tw"><table class="tbl"><thead><tr><th>Lead</th><th>Due</th><th>Status</th><th>Assigned to</th></tr></thead><tbody>
+        ${d.followUps.slice(0, 8).map((r) => leadRow(r, (x) => `<td>${followBadge(x.follow_up, d.today)}</td><td>${statusBadge(x.status)}</td><td>${x.assignee ? esc(x.assignee) : '<span class="muted">Nobody</span>'}</td>`)).join('')}</tbody></table></div>`
+        : '<div class="empty">Nothing due. Set a follow-up date on a lead and it shows up here on that day.</div>'}</section>
+      <section class="card"><div class="card-h"><h2>Leads per week</h2><span class="muted sm">Last 12 weeks</span></div>${weekChart(d.weeks)}</section>
+      <section class="card"><div class="card-h"><h2>Where leads come from</h2><span class="muted sm">Last 90 days</span></div>${hbars(d.byForm.map((x) => ({ label: x.title, value: x.c })), 'No leads in the last 90 days.')}</section>
+      </div><div class="dcol">
+      <section class="card"><div class="card-h"><h2>Newest leads</h2><button class="b ghost sm" data-go="all">All leads</button></div>
+        ${d.recent.length ? `<ul class="mini">${d.recent.map((r) => `<li><button class="linkish" data-lead="${r.id}"><b>${esc(r.name || r.email || 'Lead #' + r.id)}</b><small>${esc(r.form_type)} · ${esc(shortWhen(r.created_at))}</small></button>${statusBadge(r.status)}</li>`).join('')}</ul>` : '<div class="empty">No leads yet.</div>'}</section>
+      <section class="card"><div class="card-h"><h2>Pipeline</h2><span class="muted sm">All leads by status</span></div>${hbars(statusOrder, 'No leads yet.')}</section>
+      ${u.admin ? `<section class="card"><div class="card-h"><h2>Top referral partners</h2><span class="muted sm">Last 90 days</span></div>${hbars(d.byPartner.map((x) => ({ label: x.name, value: x.c })), 'No referred leads in the last 90 days.')}</section>` : ''}
+    </div></div>`, { title: hello, sub: new Date().toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' }) });
+  const VIEW = { new: { view: 'all', status: 'new' }, due: { view: 'due' }, all: { view: 'all' }, mine: { view: 'mine' }, enrolled: { view: 'all', status: 'enrolled' } };
+  root.querySelectorAll('[data-go]').forEach((b) => (b.onclick = () => { lf = { ...LF0, ...VIEW[b.dataset.go] }; tab = 'leads'; draw(); }));
+  root.querySelectorAll('[data-goto]').forEach((b) => (b.onclick = () => { tab = b.dataset.goto; draw(); }));
+  root.querySelectorAll('[data-lead]').forEach((b) => (b.onclick = () => openLead(Number(b.dataset.lead))));
 }
 
-let lf = { status: 'all', form: 'all', partner: 'all', q: '' };
-const money = (n) => '$' + Number(n || 0).toFixed(2);
-const METHOD = { link: "arrived through the partner's link", selected: 'chosen by the client from the list', typed: 'typed by the client (not matched)' };
+const LF0 = { view: 'open', status: 'all', form: 'all', partner: 'all', assigned: 'all', q: '' };
+let lf = { ...LF0 };
+const VIEWS = [['open', 'Open'], ['mine', 'Assigned to me'], ['unassigned', 'Unassigned'], ['due', 'Follow-ups due'], ['all', 'All leads']];
+const selected = new Set();
+let assignees = null, formTitles = {};
+const getAssignees = async () => (assignees ||= await api('/assignees'));
+function leadParams() {
+  const q = { status: lf.status, form: lf.form, partner: lf.partner, assigned: lf.assigned, q: lf.q };
+  if (lf.view === 'open' && q.status === 'all') q.status = 'open';
+  if (lf.view === 'mine') q.assigned = 'me';
+  if (lf.view === 'unassigned') q.assigned = 'none';
+  if (lf.view === 'due') q.due = '1';
+  return new URLSearchParams(q).toString();
+}
 async function leads() {
-  const qs = new URLSearchParams(lf).toString();
   const current = newScreen();
-  const d = await api('/leads?' + qs);
+  const [d, people] = await Promise.all([api('/leads?' + leadParams()), getAssignees()]);
   if (!current()) return;
+  const admin = schema.user.admin;
+  formTitles = Object.fromEntries(d.forms.map((f) => [f.type, f.title]));
+  for (const id of [...selected]) if (!d.rows.some((r) => r.id === id)) selected.delete(id);
   const cnt = Object.fromEntries(d.counts.map((c) => [c.status, c.c]));
-  const cstat = schema.commissionStatuses;
-  shell(`<h1>Leads</h1>
-   <div class="counts">${schema.leadStatuses.map((s) => `<span class="pill ${s === 'new' ? 'new' : ''}">${esc(s)}: ${cnt[s] || 0}</span>`).join('')}</div>
-   <div class="bar" style="margin-top:14px">
-    <select id="fs" aria-label="Status" style="width:auto"><option value="all">All statuses</option>${schema.leadStatuses.map((s) => `<option${lf.status === s ? ' selected' : ''}>${esc(s)}</option>`).join('')}</select>
-    <select id="ff" aria-label="Form" style="width:auto"><option value="all">All forms</option>${d.forms.map((f) => `<option value="${esc(f.type)}"${lf.form === f.type ? ' selected' : ''}>${esc(f.title)}</option>`).join('')}</select>
-    <select id="fp" aria-label="Referral partner" style="width:auto"><option value="all">All referrals</option><option value="any"${lf.partner === 'any' ? ' selected' : ''}>Any partner</option><option value="none"${lf.partner === 'none' ? ' selected' : ''}>No partner</option>${d.partners.map((p) => `<option value="${p.id}"${String(lf.partner) === String(p.id) ? ' selected' : ''}>${esc(p.name)}</option>`).join('')}</select>
-    <input id="fq" placeholder="Search name, email, phone, program, partner" value="${esc(lf.q)}" style="width:auto;flex:1;min-width:200px">
-    <a class="b line" href="/admin/api/leads.csv?${qs}">Export CSV</a></div>
-   ${d.rows.length ? `<div class="tw"><table><thead><tr><th>Date</th><th>Name</th><th>Form</th><th>Program</th><th>Referred by</th><th>Status</th><th></th></tr></thead><tbody>
-   ${d.rows.map((r) => `<tr><td>${esc(r.created_at.slice(0, 16))}</td><td>${esc(r.name || r.email)}</td><td>${esc(r.form_type)}</td><td>${esc(r.program)}</td>
-    <td>${r.partner_name ? esc(r.partner_name) + (r.commission_status !== 'none' ? ` <span class="pill ${r.commission_status === 'paid' ? 'ok' : ''}">${esc(r.commission_status)}</span>` : '') : r.referral_other ? `<span class="hint">${esc(r.referral_other)} (unmatched)</span>` : ''}</td>
-    <td><span class="pill ${r.status === 'new' ? 'new' : ''}">${esc(r.status)}</span></td><td><button class="b line" data-open="${r.id}">Open</button></td></tr>
-   <tr id="d${r.id}" hidden><td colspan="7"><div class="det"><dl>${Object.entries(r.data).map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('')}</dl>
-    <div class="row2"><div><label>Status</label><select data-st="${r.id}">${schema.leadStatuses.map((s) => `<option${r.status === s ? ' selected' : ''}>${esc(s)}</option>`).join('')}</select></div>
-    <div><label>Internal notes</label><textarea data-nt="${r.id}">${esc(r.notes)}</textarea></div></div>
-    <h3 style="margin-top:14px">Referral and commission</h3>
-    <div class="row2"><div><label>Referred by</label><select data-rp="${r.id}"><option value="">No partner</option>${d.partners.map((p) => `<option value="${p.id}"${r.referral_partner_id === p.id ? ' selected' : ''}>${esc(p.name)}</option>`).join('')}</select>
-      <p class="hint">${r.referral_method ? esc(METHOD[r.referral_method] || '') : 'The client did not name a referrer.'}${r.referral_other ? ` Typed: "${esc(r.referral_other)}". Assign a partner above if you recognize them.` : ''}</p></div>
-    <div><label>Commission</label><div class="row2"><select data-cs="${r.id}">${cstat.map((s) => `<option${r.commission_status === s ? ' selected' : ''}>${esc(s)}</option>`).join('')}</select>
-      <input type="number" min="0" step="0.01" data-ca="${r.id}" value="${esc(r.commission_amount)}" aria-label="Commission amount in CAD"></div>
-      <p class="hint">Amount in CAD. Verify the referral before marking approved.</p></div></div>
-    <div class="bar" style="margin-top:10px"><button class="b" data-save="${r.id}">Save</button><button class="b red" data-del="${r.id}">Delete lead</button></div></div></td></tr>`).join('')}
-   </tbody></table></div>` : '<div class="card">No leads match.</div>'}`);
-  const reload = () => { lf = { status: $('#fs').value, form: $('#ff').value, partner: $('#fp').value, q: $('#fq').value }; leads(); };
-  $('#fs').onchange = reload; $('#ff').onchange = reload; $('#fp').onchange = reload;
-  $('#fq').onkeydown = (e) => { if (e.key === 'Enter') reload(); };
-  root.querySelectorAll('[data-open]').forEach((b) => (b.onclick = () => { const r = $('#d' + b.dataset.open); r.hidden = !r.hidden; }));
-  root.querySelectorAll('[data-save]').forEach((b) => (b.onclick = async () => {
-    const id = b.dataset.save;
-    try {
-      await api('/leads/' + id, { method: 'PATCH', body: { status: $(`[data-st="${id}"]`).value, notes: $(`[data-nt="${id}"]`).value,
-        referral_partner_id: $(`[data-rp="${id}"]`).value, commission_status: $(`[data-cs="${id}"]`).value, commission_amount: $(`[data-ca="${id}"]`).value } });
-      say('Lead saved.'); leads();
-    } catch (x) { say(x.message, 'err'); leads(); }
+  const opt = (v, l, cur) => `<option value="${esc(v)}"${String(cur) === String(v) ? ' selected' : ''}>${esc(l)}</option>`;
+  shell(`<div class="seg" role="tablist" aria-label="Which leads">${VIEWS.map(([k, l]) => `<button role="tab" aria-selected="${lf.view === k}" data-view="${k}">${esc(l)}</button>`).join('')}</div>
+    <div class="filters">
+      <div class="search">${icon('inbox')}<input id="fq" type="search" placeholder="Search name, email, phone, program..." value="${esc(lf.q)}" aria-label="Search leads"></div>
+      <select id="fs" aria-label="Status">${opt('all', 'Any status', lf.status)}${schema.leadStatuses.map((s) => opt(s, `${cap(s)} (${cnt[s] || 0})`, lf.status)).join('')}</select>
+      <select id="ff" aria-label="Form">${opt('all', 'Any form', lf.form)}${d.forms.map((f) => opt(f.type, f.title, lf.form)).join('')}</select>
+      ${lf.view === 'mine' || lf.view === 'unassigned' ? '' : `<select id="fa" aria-label="Assigned to">${opt('all', 'Anyone', lf.assigned)}${opt('none', 'Unassigned', lf.assigned)}${people.map((p) => opt(p.id, p.name, lf.assigned)).join('')}</select>`}
+      ${admin ? `<select id="fp" aria-label="Referral partner">${opt('all', 'Any referral', lf.partner)}${opt('any', 'Referred by a partner', lf.partner)}${opt('none', 'No partner', lf.partner)}${d.partners.map((p) => opt(p.id, p.name, lf.partner)).join('')}</select>` : ''}
+    </div>
+    <div class="bulk" id="bulk" hidden><b id="bulkn"></b>
+      <select data-bulk="status" aria-label="Set status for selected"><option value="">Set status...</option>${schema.leadStatuses.map((s) => `<option value="${esc(s)}">${esc(cap(s))}</option>`).join('')}</select>
+      <select data-bulk="assign" aria-label="Assign selected"><option value="">Assign to...</option><option value="0">Nobody</option>${people.map((p) => `<option value="${p.id}">${esc(p.name)}</option>`).join('')}</select>
+      <label class="inline">Follow-up <input type="date" data-bulk="follow" aria-label="Follow-up date for selected"></label>
+      <button class="b ghost sm" id="bexport">${icon('download')}Export</button>
+      ${admin ? '<button class="b ghost sm danger" id="bdel">Delete</button>' : ''}
+      <button class="b ghost sm" id="bclear">Clear selection</button></div>
+    ${d.rows.length ? `<div class="card flush"><div class="tw"><table class="tbl leads"><thead><tr><th class="chk"><input type="checkbox" id="selall" aria-label="Select all"></th><th>Lead</th><th>Form</th><th>Status</th><th>Assigned to</th><th>Follow-up</th><th>Received</th></tr></thead><tbody>
+      ${d.rows.map((r) => `<tr data-row="${r.id}"${selected.has(r.id) ? ' class="sel"' : ''}><td class="chk"><input type="checkbox" data-sel="${r.id}"${selected.has(r.id) ? ' checked' : ''} aria-label="Select ${esc(r.name || r.email)}"></td>
+        <td><button class="linkish" data-open="${r.id}"><b>${esc(r.name || r.email || 'Lead #' + r.id)}</b><small>${esc(r.email || r.phone || '')}</small></button>${r.dupes.length ? ` <span class="badge tag" title="Also sent ${plural(r.dupes.length, 'other request')}">Returning</span>` : ''}${r.paid ? ' <span class="badge st-enrolled">Paid</span>' : ''}</td>
+        <td>${esc(formTitles[r.form_type] || r.form_type)}</td><td>${statusBadge(r.status)}</td>
+        <td>${r.assignee ? esc(r.assignee) : '<span class="muted">Unassigned</span>'}</td><td>${followBadge(r.follow_up, d.today)}</td>
+        <td class="nowrap muted">${esc(shortWhen(r.created_at))}</td></tr>`).join('')}</tbody></table></div>
+      <p class="tfoot muted">${plural(d.rows.length, 'lead')}${d.rows.length === 500 ? ' (the newest 500; search or filter to find older ones)' : ''}</p></div>`
+    : `<div class="card empty">${lf.view === 'due' ? 'No follow-ups are due. Nice work.' : 'No leads match these filters.'}</div>`}`,
+  { title: 'Leads', actions: `<a class="b ghost" href="/admin/api/leads.csv?${leadParams()}">${icon('download')}Export CSV</a>` });
+
+  const reload = () => { lf = { ...lf, status: $('#fs').value, form: $('#ff').value, assigned: $('#fa') ? $('#fa').value : lf.assigned, partner: $('#fp') ? $('#fp').value : 'all', q: $('#fq').value.trim() }; leads(); };
+  ['#fs', '#ff', '#fa', '#fp'].forEach((s) => { if ($(s)) $(s).onchange = reload; });
+  let typing; $('#fq').oninput = () => { clearTimeout(typing); typing = setTimeout(reload, 400); };
+  root.querySelectorAll('[data-view]').forEach((b) => (b.onclick = () => { lf = { ...LF0, view: b.dataset.view, q: lf.q }; leads(); }));
+  root.querySelectorAll('[data-open]').forEach((b) => (b.onclick = () => openLead(Number(b.dataset.open))));
+
+  const sync = () => {
+    $('#bulk').hidden = !selected.size; $('#bulkn').textContent = `${selected.size} selected`;
+    if ($('#selall')) $('#selall').checked = selected.size > 0 && selected.size === d.rows.length;
+    root.querySelectorAll('[data-row]').forEach((tr) => tr.classList.toggle('sel', selected.has(Number(tr.dataset.row))));
+  };
+  root.querySelectorAll('[data-sel]').forEach((c) => (c.onchange = () => { const id = Number(c.dataset.sel); c.checked ? selected.add(id) : selected.delete(id); sync(); }));
+  if ($('#selall')) $('#selall').onchange = (e) => { d.rows.forEach((r) => (e.target.checked ? selected.add(r.id) : selected.delete(r.id))); root.querySelectorAll('[data-sel]').forEach((c) => (c.checked = e.target.checked)); sync(); };
+  const bulk = async (action, value, label) => {
+    try { const r = await api('/leads/bulk', { method: 'POST', body: { ids: [...selected], action, value } }); selected.clear(); say(`${plural(r.count, 'lead')} ${label}.`); }
+    catch (x) { say(x.message, 'err'); }
+    leads();
+  };
+  root.querySelectorAll('[data-bulk]').forEach((el) => (el.onchange = () => {
+    if (el.value === '' && el.dataset.bulk !== 'follow') return;
+    const name = el.selectedOptions ? el.selectedOptions[0].textContent : day(el.value);
+    bulk(el.dataset.bulk, el.value, el.dataset.bulk === 'status' ? `set to "${name}"` : el.dataset.bulk === 'assign' ? (el.value === '0' ? 'unassigned' : `assigned to ${name}`) : `given a follow-up on ${name}`);
   }));
-  root.querySelectorAll('[data-del]').forEach((b) => (b.onclick = async () => {
-    if (!confirm('Delete this lead permanently?')) return;
-    try { await api('/leads/' + b.dataset.del, { method: 'DELETE' }); say('Lead deleted.'); leads(); } catch (x) { say(x.message, 'err'); }
-  }));
+  $('#bexport').onclick = () => { location.href = `/admin/api/leads.csv?ids=${[...selected].join(',')}`; };
+  if ($('#bdel')) $('#bdel').onclick = () => { if (confirm(`Delete ${plural(selected.size, 'lead')} permanently? This cannot be undone.`)) bulk('delete', null, 'deleted'); };
+  $('#bclear').onclick = () => { selected.clear(); root.querySelectorAll('[data-sel]').forEach((c) => (c.checked = false)); sync(); };
+  sync();
 }
 
-async function referrals(invite = null) {
-  const current = newScreen();
-  const d = await api('/referrals/summary');
-  if (!current()) return;
-  const base = d.siteUrl || location.origin;
-  const link = (code) => `${base}/?ref=${code}`;
-  const tot = d.partners.reduce((a, p) => ({ pending: a.pending + p.pending, approved: a.approved + p.approved, paid: a.paid + p.paid, total: a.total + p.total }), { pending: 0, approved: 0, paid: 0, total: 0 });
-  shell(`<div class="bar"><h1 class="grow" style="margin:0">Referrals</h1><button class="b" id="addp">Add partner</button></div>
-   <p>Clients pick who referred them on the website forms, or arrive through a partner's link. Open a lead to confirm the referral and set the commission. Commission amounts are in CAD.</p>
-   <p class="hint">Partners can sign in to their own <a href="/referral-portal" target="_blank" rel="noopener">referral partner portal</a> (separate from this admin panel) to follow their referrals: first name and last initial, what they asked about, progress and commission, never contact details. To give a partner access, add their email in Referral partners, then click <strong>Send sign-in invite</strong>: they get a link to choose their own password. Use it again if they forget their password.</p>
-   ${invite ? `<div class="card invite" role="status"><h2>Sign-in invite for ${esc(invite.name)}</h2>
-     <p>${invite.emailed ? `Emailed to <strong>${esc(invite.email)}</strong>. You can also send this link yourself (for example on WhatsApp):` : `Email is not set up, so send this link to ${esc(invite.name)} yourself (for example on WhatsApp or by email to ${esc(invite.email)}):`}</p>
-     <div class="bar" style="margin:0"><input class="grow" readonly value="${esc(invite.link)}" aria-label="Invite link"><button class="b" data-copy="${esc(invite.link)}">Copy link</button></div>
-     <p class="hint">The link works for 7 days and only once. They choose their password, then sign in with ${esc(invite.email)}.</p></div>` : ''}
-   <div class="counts"><span class="pill">Referred leads: ${tot.total}</span><span class="pill">Pending: ${money(tot.pending)}</span><span class="pill">Approved, unpaid: ${money(tot.approved)}</span><span class="pill ok">Paid: ${money(tot.paid)}</span></div>
-   <div class="tw" style="margin-top:14px"><table><thead><tr><th>Partner</th><th>Referral link</th><th>Portal sign-in</th><th>Leads</th><th>Booked</th><th>Applied</th><th>Enrolled</th><th>Pending</th><th>Approved</th><th>Paid</th><th></th></tr></thead><tbody>
-   ${d.partners.map((p) => `<tr><td><strong>${esc(p.name)}</strong>${p.active ? '' : ' <span class="pill">inactive</span>'}${p.listed ? '' : ' <span class="pill">link only</span>'}<br><span class="hint">${esc(p.code)}</span></td>
-    <td><button class="b line" data-copy="${esc(link(p.code))}">Copy link</button></td>
-    <td>${portalStatus(p)}<br><button class="b line" style="margin-top:4px" data-invite="${p.id}"${p.email && p.portal_enabled ? '' : ' disabled'} title="${p.email ? (p.portal_enabled ? 'Send a link to choose a password' : 'Portal sign-in is turned off for this partner') : 'Add an email address first'}">${p.has_password ? 'Send password reset' : 'Send sign-in invite'}</button></td><td>${p.total}</td><td>${p.booked}</td><td>${p.applied}</td><td>${p.enrolled}</td><td>${money(p.pending)}</td><td>${money(p.approved)}</td><td>${money(p.paid)}</td>
-    <td><button class="b line" data-leads="${p.id}">View leads</button></td></tr>`).join('') || '<tr><td colspan="11">No partners yet. Add one to start tracking referrals.</td></tr>'}</tbody></table></div>
-   <p class="hint" style="margin-top:12px">Leads with no partner: ${d.unattributed}${d.other ? `, including ${d.other} where the client typed a name that did not match a partner` : ''}. <button class="b line" id="unm">Review them</button></p>`);
-  $('#addp').onclick = () => { tab = 'partners'; draw(); };
-  $('#unm').onclick = () => { lf = { status: 'all', form: 'all', partner: 'none', q: '' }; tab = 'leads'; draw(); };
-  root.querySelectorAll('[data-leads]').forEach((b) => (b.onclick = () => { lf = { status: 'all', form: 'all', partner: b.dataset.leads, q: '' }; tab = 'leads'; draw(); }));
-  root.querySelectorAll('[data-copy]').forEach((b) => (b.onclick = async () => { try { await navigator.clipboard.writeText(b.dataset.copy); b.textContent = 'Copied'; } catch { prompt('Copy this link:', b.dataset.copy); } }));
-  root.querySelectorAll('[data-invite]').forEach((b) => (b.onclick = async () => {
-    b.disabled = true;
-    try { const r = await api(`/partners/${b.dataset.invite}/invite`, { method: 'POST' }); referrals({ ...r, name: d.partners.find((p) => String(p.id) === b.dataset.invite).name }); window.scrollTo(0, 0); }
-    catch (x) { say(x.message, 'err'); referrals(); }
-  }));
+const METHOD = { link: "arrived through the partner's link", selected: 'chosen by the client from the list', typed: 'typed by the client (not matched)' };
+const EVENT_ICON = { note: 'pen', status: 'sliders', assign: 'user', follow: 'grid', paid: 'card', contact: 'chat', partner: 'link', commission: 'card' };
+let drawerFor = null;
+function closeDrawer() {
+  const d = $('#drawer'); if (d) d.remove();
+  drawerFor = null; document.body.classList.remove('noscroll');
 }
-function portalStatus(p) {
-  if (!p.portal_enabled) return '<span class="pill">sign-in off</span>';
-  if (!p.email) return '<span class="hint">needs an email</span>';
-  if (p.has_password) return `<span class="pill ok">can sign in</span><br><span class="hint">last: ${esc(when(p.last_login))}</span>`;
-  return p.invited ? '<span class="pill">invited</span>' : '<span class="hint">not invited yet</span>';
+const waNumber = (p) => { const d = String(p || '').replace(/\D/g, ''); return d.length === 10 ? '1' + d : d; };
+async function openLead(id) {
+  let r, events, people;
+  try { [r, events, people] = await Promise.all([api('/leads/' + id), api(`/leads/${id}/events`), getAssignees()]); }
+  catch (x) { say(x.message, 'err'); return draw(); }
+  const admin = schema.user.admin, today = new Date().toISOString().slice(0, 10), u = schema.user;
+  const partners = admin ? await api('/partners').catch(() => []) : [];
+  const title = r.name || r.email || 'Lead #' + r.id, form = formTitles[r.form_type] || r.form_type;
+  const first = String(r.name || '').trim().split(/\s+/)[0];
+  const waText = `Hi ${first || 'there'}, this is ${u.name ? u.name.split(/\s+/)[0] + ' from ' : ''}UGEC Canada, about your request on our website (${form}).`;
+  const contact = [
+    r.phone && `<a class="b wa" data-via="whatsapp" target="_blank" rel="noopener" href="https://wa.me/${waNumber(r.phone)}?text=${encodeURIComponent(waText)}">${icon('chat')}WhatsApp</a>`,
+    r.email && `<a class="b ghost" data-via="email" href="mailto:${esc(r.email)}?subject=${encodeURIComponent('Your request with UGEC Canada')}">${icon('mail')}Email</a>`,
+    r.phone && `<a class="b ghost" data-via="call" href="tel:+${waNumber(r.phone)}">${icon('phone')}Call</a>`,
+  ].filter(Boolean).join('');
+  const opt = (v, l, cur) => `<option value="${esc(v)}"${String(cur ?? '') === String(v) ? ' selected' : ''}>${esc(l)}</option>`;
+  const history = [
+    ...events.map((e) => `<li class="ev-${esc(e.kind)}"><span class="ev-ic">${icon(EVENT_ICON[e.kind] || 'pen')}</span><div><p>${esc(e.text)}</p><small>${esc(e.user_email)} · ${esc(when(e.created_at))}</small></div></li>`),
+    r.notes ? `<li class="ev-note"><span class="ev-ic">${icon('pen')}</span><div><p>${esc(r.notes)}</p><small>Earlier notes</small></div></li>` : '',
+    `<li><span class="ev-ic">${icon('inbox')}</span><div><p>Sent the ${esc(form)} form${r.partner_name ? `, referred by ${esc(r.partner_name)}` : ''}</p><small>${esc(when(r.created_at))}</small></div></li>`,
+  ].join('');
+  closeDrawer();
+  const wrap = document.createElement('div');
+  wrap.id = 'drawer';
+  wrap.innerHTML = `<div class="drawer-back" data-close></div>
+   <aside class="drawer" role="dialog" aria-modal="true" aria-labelledby="dtitle">
+    <header class="dh"><div><h2 id="dtitle">${esc(title)}</h2><p>${esc(form)} · received ${esc(when(r.created_at))} · #${r.id}</p></div><button class="b ghost icon-only" data-close aria-label="Close">${icon('x')}</button></header>
+    <div class="db">
+     ${r.dupes.length ? `<div class="notice sm">${icon('users')}<div>This person has sent ${plural(r.dupes.length, 'other request')}: ${r.dupes.map((x) => `<button class="linkish inline" data-lead="${x}">#${x}</button>`).join(', ')}</div></div>` : ''}
+     ${contact ? `<div class="contact">${contact}</div>` : ''}
+     <section class="dsec"><h3>Progress</h3><form id="lform"><div class="g2">
+       <div><label for="l_st">Status</label><select id="l_st" name="status">${schema.leadStatuses.map((s) => opt(s, cap(s), r.status)).join('')}</select></div>
+       <div><label for="l_as">Assigned to</label><select id="l_as" name="assigned_to">${opt('', 'Nobody', r.assigned_to)}${people.map((p) => opt(p.id, p.name, r.assigned_to)).join('')}</select></div>
+       <div class="span2"><label for="l_fu">Follow-up date</label><div class="fu"><input type="date" id="l_fu" name="follow_up" value="${esc(r.follow_up)}">
+         <span class="quick">${[['Tomorrow', 1], ['In 3 days', 3], ['Next week', 7]].map(([l, n]) => `<button type="button" class="chip" data-fu="${addDays(today, n)}">${l}</button>`).join('')}<button type="button" class="chip" data-fu="">Clear</button></span></div>
+         <p class="hint">It shows on the Dashboard on that day${r.assigned_to ? ', and in the morning email to whoever it is assigned to' : ''}.</p></div>
+       <div class="span2"><label class="check"><input type="checkbox" name="paid"${r.paid ? ' checked' : ''}> Paid for a consultation <span class="muted">(check in Stripe first)</span></label></div>
+       ${admin ? `<div><label for="l_rp">Referred by</label><select id="l_rp" name="referral_partner_id">${opt('', 'No partner', r.referral_partner_id)}${partners.map((p) => opt(p.id, p.name, r.referral_partner_id)).join('')}</select>
+         <p class="hint">${r.referral_method ? esc(METHOD[r.referral_method] || '') : 'The client did not name a referrer.'}${r.referral_other ? ` Typed: "${esc(r.referral_other)}".` : ''}</p></div>
+       <div><label for="l_cs">Commission (CAD)</label><div class="g2 tight"><select id="l_cs" name="commission_status">${schema.commissionStatuses.map((s) => opt(s, cap(s), r.commission_status)).join('')}</select>
+         <input type="number" min="0" step="0.01" name="commission_amount" value="${esc(r.commission_amount)}" aria-label="Commission amount in CAD"></div></div>` : ''}
+       </div><div class="row-end"><button class="b" type="submit">Save changes</button></div></form></section>
+     <section class="dsec"><h3>Details from the form</h3><dl class="kv">${Object.entries(r.data).map(([k, v]) => `<dt>${esc(k.replace(/_/g, ' '))}</dt><dd>${esc(v)}</dd>`).join('') || '<dd class="muted">No details.</dd>'}</dl></section>
+     <section class="dsec"><h3>Notes & history</h3>
+       <form id="nform" class="note-form"><textarea id="ntext" rows="2" placeholder="Add a note, e.g. called, left a voicemail, sent the program list"></textarea><button class="b sm" type="submit">Add note</button></form>
+       <ol class="timeline">${history}</ol></section>
+     ${admin ? `<div class="row-end"><button class="b ghost sm danger" id="ldel">Delete this lead</button></div>` : ''}
+    </div></aside>`;
+  document.body.append(wrap); document.body.classList.add('noscroll');
+  drawerFor = id;
+  const D = (s) => wrap.querySelector(s);
+  wrap.querySelectorAll('[data-close]').forEach((b) => (b.onclick = closeDrawer));
+  D('[aria-label="Close"]').focus();
+  wrap.querySelectorAll('[data-lead]').forEach((b) => (b.onclick = () => openLead(Number(b.dataset.lead))));
+  wrap.querySelectorAll('[data-fu]').forEach((b) => (b.onclick = () => { D('#l_fu').value = b.dataset.fu; }));
+  wrap.querySelectorAll('[data-via]').forEach((a) => a.addEventListener('click', () => { api(`/leads/${id}/contact`, { method: 'POST', body: { via: a.dataset.via } }).catch(() => {}); }));
+  const refresh = async (m) => { say(m); if (tab === 'leads') await leads(); else if (tab === 'dashboard') await dashboard(); openLead(id); };
+  D('#lform').onsubmit = async (ev) => {
+    ev.preventDefault();
+    const f = ev.target, body = { status: f.status.value, assigned_to: f.assigned_to.value, follow_up: f.follow_up.value, paid: f.paid.checked };
+    if (admin) Object.assign(body, { referral_partner_id: f.referral_partner_id.value, commission_status: f.commission_status.value, commission_amount: f.commission_amount.value });
+    try { await api('/leads/' + id, { method: 'PATCH', body }); await refresh('Lead saved.'); } catch (x) { alert(x.message); }
+  };
+  D('#nform').onsubmit = async (ev) => {
+    ev.preventDefault();
+    const text = D('#ntext').value.trim(); if (!text) return D('#ntext').focus();
+    try { await api(`/leads/${id}/events`, { method: 'POST', body: { text } }); openLead(id); } catch (x) { alert(x.message); }
+  };
+  if (D('#ldel')) D('#ldel').onclick = async () => {
+    if (!confirm(`Delete the lead from ${title} permanently? This cannot be undone.`)) return;
+    try { await api('/leads/' + id, { method: 'DELETE' }); closeDrawer(); say('Lead deleted.'); draw(); } catch (x) { alert(x.message); }
+  };
 }
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && drawerFor && !document.querySelector('dialog[open]')) closeDrawer(); });
 
 const keyName = (s) => String(s).toLowerCase().normalize('NFKD').replace(/[^\w\s]/g, '').trim().replace(/\s+/g, '_').slice(0, 40);
 const SOURCES = [['', 'Choices I type below'], ['@programs', 'All programs (except skilled trades)'], ['@trades', 'Skilled-trades programs']];
@@ -374,28 +564,74 @@ function mountRanges(form) {
 }
 const mountLists = (defs) => root.querySelectorAll('.le').forEach((box) => mountList(box, defs.find((f) => f.n === box.dataset.le)));
 
+async function referrals(invite = null) {
+  const current = newScreen();
+  const d = await api('/referrals/summary');
+  if (!current()) return;
+  const base = d.siteUrl || location.origin;
+  const link = (code) => `${base}/?ref=${code}`;
+  const tot = d.partners.reduce((a, p) => ({ pending: a.pending + p.pending, approved: a.approved + p.approved, paid: a.paid + p.paid, total: a.total + p.total }), { pending: 0, approved: 0, paid: 0, total: 0 });
+  shell(`<p class="lede">Clients pick who referred them on the website forms, or arrive through a partner's link. Open a lead to confirm the referral and set the commission (in CAD).</p>
+   ${invite ? `<div class="card invite" role="status"><h2>Sign-in invite for ${esc(invite.name)}</h2>
+     <p>${invite.emailed ? `Emailed to <strong>${esc(invite.email)}</strong>. You can also send this link yourself (for example on WhatsApp):` : `Email is not set up, so send this link to ${esc(invite.name)} yourself (for example on WhatsApp or by email to ${esc(invite.email)}):`}</p>
+     <div class="bar"><input class="grow" readonly value="${esc(invite.link)}" aria-label="Invite link"><button class="b" data-copy="${esc(invite.link)}">Copy link</button></div>
+     <p class="hint">The link works for 7 days and only once. They choose their password, then sign in with ${esc(invite.email)}.</p></div>` : ''}
+   <div class="stats">
+     <div class="stat static"><span class="stat-n">${tot.total}</span><span class="stat-l">Referred leads</span></div>
+     <div class="stat static"><span class="stat-n">${money(tot.pending)}</span><span class="stat-l">Pending</span></div>
+     <div class="stat static"><span class="stat-n">${money(tot.approved)}</span><span class="stat-l">Approved, not paid</span></div>
+     <div class="stat static"><span class="stat-n">${money(tot.paid)}</span><span class="stat-l">Paid</span></div>
+   </div>
+   <div class="card flush"><div class="tw"><table class="tbl"><thead><tr><th>Partner</th><th>Referral link</th><th>Portal sign-in</th><th>Leads</th><th>Booked</th><th>Applied</th><th>Enrolled</th><th>Pending</th><th>Approved</th><th>Paid</th><th></th></tr></thead><tbody>
+   ${d.partners.map((p) => `<tr><td><b>${esc(p.name)}</b>${p.active ? '' : ' <span class="badge">inactive</span>'}${p.listed ? '' : ' <span class="badge">link only</span>'}<br><span class="muted sm">${esc(p.code)}</span></td>
+    <td><button class="b ghost sm" data-copy="${esc(link(p.code))}">Copy link</button></td>
+    <td>${portalStatus(p)}<br><button class="b ghost sm mt-xs" data-invite="${p.id}"${p.email && p.portal_enabled ? '' : ' disabled'} title="${p.email ? (p.portal_enabled ? 'Send a link to choose a password' : 'Portal sign-in is turned off for this partner') : 'Add an email address first'}">${p.has_password ? 'Send password reset' : 'Send sign-in invite'}</button></td><td>${p.total}</td><td>${p.booked}</td><td>${p.applied}</td><td>${p.enrolled}</td><td>${money(p.pending)}</td><td>${money(p.approved)}</td><td>${money(p.paid)}</td>
+    <td><button class="b ghost sm" data-leads="${p.id}">View leads</button></td></tr>`).join('') || '<tr><td colspan="11" class="empty">No partners yet. Add one to start tracking referrals.</td></tr>'}</tbody></table></div></div>
+   <p class="muted">Leads with no partner: ${d.unattributed}${d.other ? `, including ${d.other} where the client typed a name that did not match a partner` : ''}. <button class="b ghost sm" id="unm">Review them</button></p>
+   <details class="help"><summary>How the referral partner portal works</summary><p>Partners can sign in to their own <a href="/referral-portal" target="_blank" rel="noopener">referral partner portal</a> (separate from this admin panel) to follow their referrals: first name and last initial, what they asked about, progress and commission, never contact details. To give a partner access, add their email in Referral partners, then click <strong>Send sign-in invite</strong>: they get a link to choose their own password. Use it again if they forget their password.</p></details>`,
+  { title: 'Referrals', actions: `<button class="b" id="addp">${icon('plus')}Add partner</button>` });
+  $('#addp').onclick = () => { tab = 'partners'; draw(); };
+  $('#unm').onclick = () => { lf = { ...LF0, view: 'all', partner: 'none' }; tab = 'leads'; draw(); };
+  root.querySelectorAll('[data-leads]').forEach((b) => (b.onclick = () => { lf = { ...LF0, view: 'all', partner: b.dataset.leads }; tab = 'leads'; draw(); }));
+  root.querySelectorAll('[data-copy]').forEach((b) => (b.onclick = async () => { try { await navigator.clipboard.writeText(b.dataset.copy); b.textContent = 'Copied'; } catch { prompt('Copy this link:', b.dataset.copy); } }));
+  root.querySelectorAll('[data-invite]').forEach((b) => (b.onclick = async () => {
+    b.disabled = true;
+    try { const r = await api(`/partners/${b.dataset.invite}/invite`, { method: 'POST' }); referrals({ ...r, name: d.partners.find((p) => String(p.id) === b.dataset.invite).name }); window.scrollTo(0, 0); }
+    catch (x) { say(x.message, 'err'); referrals(); }
+  }));
+}
+function portalStatus(p) {
+  if (!p.portal_enabled) return '<span class="badge">sign-in off</span>';
+  if (!p.email) return '<span class="muted sm">needs an email</span>';
+  if (p.has_password) return `<span class="badge st-enrolled">can sign in</span><br><span class="muted sm">last: ${esc(when(p.last_login))}</span>`;
+  return p.invited ? '<span class="badge">invited</span>' : '<span class="muted sm">not invited yet</span>';
+}
+
 function input(f, v, opts = {}) {
-  const id = 'f_' + f.n, name = `name="${f.n}"`;
+  const id = 'f_' + f.n, name = `name="${f.n}"`, hint = f.h ? `<p class="hint">${esc(f.h)}</p>` : '';
+  const field = (control, cls = '') => `<div class="field ${cls}"><div class="fl"><label for="${id}">${esc(f.l)}${f.r ? ' <span class="req">*</span>' : ''}</label>${hint}</div><div class="fc">${control}</div></div>`;
+  if (f.t === 'heading') return `<h2 class="sec-h">${esc(f.l)}</h2>${f.hint ? `<p class="hint">${esc(f.hint)}</p>` : ''}`;
+  if (f.t === 'subheading') return `<h3 class="subh">${esc(f.l)}</h3>`;
   if (f.t === 'range') {
     const val = v || f.def;
-    return `<label for="${id}">${esc(f.l)}</label><div class="range-field"><input type="range" id="${id}" ${name} min="${f.min}" max="${f.max}" step="${f.step || 1}" value="${esc(val)}" data-unit="${esc(f.unit || '')}"><output for="${id}">${esc(val)} ${esc(f.unit || '')}</output></div>` +
+    return field(`<div class="range-field"><input type="range" id="${id}" ${name} min="${f.min}" max="${f.max}" step="${f.step || 1}" value="${esc(val)}" data-unit="${esc(f.unit || '')}"><output for="${id}">${esc(val)} ${esc(f.unit || '')}</output></div>` +
       (f.preview ? `<div class="logo-preview" data-preview="${esc(f.preview)}" data-for="${id}"><div class="lp-bar"><span class="lp-logo"></span><span class="lp-nav"><i>Home</i><i>Already in Canada</i><i>Contact Us</i><b>Book Consultation</b></span></div>
-        <p class="hint">How the header will look. Phones show the logo slightly smaller. Click Save to apply.</p></div>` : '');
+        <p class="hint">How the header will look. Phones show the logo slightly smaller.</p></div>` : ''));
   }
-  if (f.t === 'heading') return `<h2 class="sec-h">${esc(f.l)}</h2>${f.hint ? `<p class="hint">${esc(f.hint)}</p>` : ''}`;
-  if (f.t === 'list' || f.t === 'map') return `<div class="le" data-le="${esc(f.n)}"><label>${esc(f.l)}</label><input type="hidden" ${name} value="${esc(v)}">
-    <div class="le-items"></div><button type="button" class="b line" data-le-add>+ ${esc(f.add || 'Add')}</button></div>`;
-  if (f.t === 'checkbox') return `<div class="chk"><input type="checkbox" id="${id}" ${name}${v ? ' checked' : ''}><label for="${id}" style="margin:0">${esc(f.l)}</label></div>`;
+  if (f.t === 'list' || f.t === 'map') return `<div class="field wide"><div class="fl"><label>${esc(f.l)}</label>${hint}</div><div class="fc"><div class="le" data-le="${esc(f.n)}"><input type="hidden" ${name} value="${esc(v)}">
+    <div class="le-items"></div><button type="button" class="b ghost sm" data-le-add>${icon('plus')}${esc(f.add || 'Add')}</button></div></div></div>`;
+  if (f.t === 'checkbox') return `<div class="field"><div class="fl"></div><div class="fc"><label class="check"><input type="checkbox" id="${id}" ${name}${v ? ' checked' : ''}> ${esc(f.l)}</label>${hint}</div></div>`;
   if (f.t === 'image') {
     const shapes = (f.shapes || ['free']).filter((k) => SHAPES[k]), square = SHAPES[shapes[0]].ratio === 1;
-    return `<label>${esc(f.l)}</label><div class="img-field" data-folder="${esc(f.folder)}" data-shapes="${esc(shapes.join(','))}" data-max="${esc(f.max || '')}" data-format="${esc(f.format || '')}">
+    return `<div class="field"><div class="fl"><label>${esc(f.l)}</label>${hint}</div><div class="fc"><div class="img-field" data-folder="${esc(f.folder)}" data-shapes="${esc(shapes.join(','))}" data-max="${esc(f.max || '')}" data-format="${esc(f.format || '')}">
     <div class="img-prev${square ? '' : ' wide'}">${v ? `<img src="${esc(v)}" alt="">` : '<span>None</span>'}</div>
     <div><input type="hidden" ${name} value="${esc(v)}"><input type="file" accept="image/jpeg,image/png,image/webp" hidden aria-label="${esc(f.l)}">
-      <div class="bar" style="margin:0"><button type="button" class="b line" data-pick>${v ? 'Change' : 'Upload'}</button><button type="button" class="b line" data-adjust${v ? '' : ' hidden'}>Adjust</button><button type="button" class="b line" data-clear${v ? '' : ' hidden'}>Remove</button></div>
-      <p class="hint">JPG, PNG or WebP. After choosing it you can move, zoom and crop it${shapes.length > 1 ? ', and pick a shape such as ' + shapes.slice(1).map((k) => SHAPES[k].label.toLowerCase()).join(' or ') : ''}. Click Save to apply.</p></div></div>`;
+      <div class="bar"><button type="button" class="b ghost sm" data-pick>${v ? 'Change' : 'Upload'}</button><button type="button" class="b ghost sm" data-adjust${v ? '' : ' hidden'}>Adjust</button><button type="button" class="b ghost sm danger" data-clear${v ? '' : ' hidden'}>Remove</button></div>
+      <p class="hint">JPG, PNG or WebP. You can move, zoom and crop it${shapes.length > 1 ? ` (shapes: ${shapes.map((k) => SHAPES[k].label.toLowerCase()).join(', ')})` : ''}.</p></div></div></div></div>`;
   }
   let c;
   if (f.t === 'textarea') c = `<textarea id="${id}" ${name} rows="${f.rows || 4}">${esc(v)}</textarea>`;
+  else if (f.t === 'lines') c = `<textarea id="${id}" ${name} rows="${Math.max(3, String(v || '').split('\n').length + 1)}" class="lines">${esc(v)}</textarea>`;
   else if (f.t === 'json') c = `<textarea id="${id}" ${name} class="json" rows="${f.rows || 10}" spellcheck="false">${esc(v)}</textarea>`;
   else if (f.t === 'select') c = `<select id="${id}" ${name}>${f.o.map((o) => { const [val, lab] = Array.isArray(o) ? o : [o, o]; return `<option value="${esc(val)}"${String(v ?? f.o[0][0] ?? f.o[0]) === val ? ' selected' : ''}>${esc(lab)}</option>`; }).join('')}</select>`;
   else if (f.t === 'ref') c = `<select id="${id}" ${name}><option value="">None</option>${(opts.refs[f.ref] || []).map((o) => `<option value="${o.id}"${String(v) === String(o.id) ? ' selected' : ''}>${esc(o.name)}</option>`).join('')}</select>`;
@@ -404,16 +640,22 @@ function input(f, v, opts = {}) {
     c = `<input id="${id}" ${name} type="${f.t === 'number' ? 'number' : f.t === 'date' ? 'date' : 'text'}" value="${esc(v)}"${f.r ? ' required' : ''}${dl}>` +
       (f.suggest ? `<datalist id="dl_${f.n}">${[...new Set((opts.rows || []).map((r) => r[f.n]).filter(Boolean))].map((x) => `<option value="${esc(x)}">`).join('')}</datalist>` : '');
   }
-  return `<label for="${id}">${esc(f.l)}${f.r ? ' *' : ''}</label>${c}`;
+  return field(c, f.t === 'textarea' || f.t === 'lines' || f.t === 'json' ? 'tall' : '');
 }
 function collect(form, def) {
   const o = {};
   for (const f of def.fields) {
-    const el = form.elements[f.n]; if (!el) continue;
+    const el = f.n && form.elements[f.n]; if (!el) continue;
     o[f.n] = f.t === 'checkbox' ? el.checked : el.value;
   }
   return o;
 }
+function trackChanges(form) {
+  const bar = form.querySelector('.savebar');
+  const mark = () => { dirty = true; bar.classList.add('dirty'); bar.querySelector('.state').textContent = 'You have unsaved changes'; };
+  form.addEventListener('input', mark); form.addEventListener('change', mark);
+}
+
 async function list(key) {
   const def = schema.resources[key];
   const current = newScreen();
@@ -422,11 +664,11 @@ async function list(key) {
   const col = (r, c) => {
     const f = def.fields.find((x) => x.n === c); const v = r[c];
     if (f && f.t === 'image') return v ? `<img class="thumb" src="${esc(v)}" alt="">` : '<span class="thumb none" aria-label="No photo"></span>';
-    return f && f.t === 'checkbox' ? (v ? '<span class="pill ok">yes</span>' : '<span class="pill">no</span>') : esc(v);
+    return f && f.t === 'checkbox' ? (v ? '<span class="badge st-enrolled">Yes</span>' : '<span class="badge">No</span>') : esc(v);
   };
-  shell(`<div class="bar"><h1 class="grow" style="margin:0">${esc(def.label)}</h1><button class="b" id="new">Add new</button></div>
-   <div class="tw"><table><thead><tr>${def.list.map((c) => `<th>${esc((def.fields.find((f) => f.n === c) || { l: c }).l)}</th>`).join('')}<th></th></tr></thead><tbody>
-   ${rows.map((r) => `<tr>${def.list.map((c) => `<td>${col(r, c)}</td>`).join('')}<td><button class="b line" data-edit="${esc(r[def.id])}">Edit</button></td></tr>`).join('') || `<tr><td colspan="${def.list.length + 1}">Nothing here yet.</td></tr>`}</tbody></table></div>`);
+  shell(`<div class="card flush"><div class="tw"><table class="tbl"><thead><tr>${def.list.map((c) => `<th>${esc((def.fields.find((f) => f.n === c) || { l: c }).l)}</th>`).join('')}<th></th></tr></thead><tbody>
+   ${rows.map((r) => `<tr>${def.list.map((c) => `<td>${col(r, c)}</td>`).join('')}<td class="row-end"><button class="b ghost sm" data-edit="${esc(r[def.id])}">Edit</button></td></tr>`).join('') || `<tr><td colspan="${def.list.length + 1}" class="empty">Nothing here yet.</td></tr>`}</tbody></table></div></div>`,
+  { title: def.label, sub: plural(rows.length, 'item'), actions: `<button class="b" id="new">${icon('plus')}Add new</button>` });
   $('#new').onclick = () => editor(key, null, rows);
   root.querySelectorAll('[data-edit]').forEach((b) => (b.onclick = () => editor(key, rows.find((r) => String(r[def.id]) === b.dataset.edit), rows)));
 }
@@ -437,39 +679,54 @@ async function editor(key, row, rows) {
   if (!current()) return;
   const isNew = !row;
   const defaults = isNew ? { published: 1, visible: 1, enabled: 1, listed: 1, active: 1, portal_enabled: 1, sort: 0, published_at: new Date().toISOString().slice(0, 10) } : row;
-  shell(`<p><button class="b line" id="back">Back to list</button></p><div class="card"><h2>${isNew ? 'Add' : 'Edit'}: ${esc(def.label)}</h2>
-   <form id="ef">${def.fields.map((f) => (f.n === def.id && !isNew && !def.idEditable ? '' : input(f, defaults[f.n], { refs, rows }))).join('')}
-   <div class="bar" style="margin-top:18px"><button class="b" type="submit">Save</button>${isNew ? '' : '<button class="b red" type="button" id="rm">Delete</button>'}</div></form></div>`);
-  $('#back').onclick = () => draw();
+  const label = def.label.replace(/s$/, '').replace(/ies$/, 'y');
+  shell(`<form id="ef" class="card form">${def.fields.map((f) => (f.n === def.id && !isNew && !def.idEditable ? '' : input(f, defaults[f.n], { refs, rows }))).join('')}
+   <div class="savebar"><span class="state">${isNew ? 'Not saved yet' : 'No changes'}</span>${isNew ? '' : '<button class="b ghost danger" type="button" id="rm">Delete</button>'}<button class="b" type="submit">Save</button></div></form>`,
+  { title: isNew ? `Add ${def.label.toLowerCase()}` : (row.name || row.title || `Edit ${label.toLowerCase()}`), sub: def.label, actions: '<button class="b ghost" id="back">Back to list</button>' });
+  $('#back').onclick = () => { if (leave()) draw(); };
   root.querySelectorAll('.img-field').forEach((box) => imageField(box, $('#ef')));
   mountLists(def.fields);
+  trackChanges($('#ef'));
   $('#ef').onsubmit = async (ev) => {
     ev.preventDefault();
     try {
-      const body = collect(ev.target, def);
-      await api(isNew ? '/' + key : `/${key}/${encodeURIComponent(row[def.id])}`, { method: isNew ? 'POST' : 'PUT', body });
-      say('Saved.'); draw();
-    } catch (x) { say(x.message, 'err'); const m = document.createElement('div'); m.className = 'msg err'; m.textContent = x.message; $('#ef').prepend(m); window.scrollTo(0, 0); }
+      await api(isNew ? '/' + key : `/${key}/${encodeURIComponent(row[def.id])}`, { method: isNew ? 'POST' : 'PUT', body: collect(ev.target, def) });
+      dirty = false; say('Saved.'); draw();
+    } catch (x) { const m = document.createElement('div'); m.className = 'msg err'; m.setAttribute('role', 'alert'); m.textContent = x.message; $('#ef').prepend(m); m.scrollIntoView({ block: 'center' }); }
   };
   if (!isNew) $('#rm').onclick = async () => {
     if (!confirm('Delete this item permanently?')) return;
-    try { await api(`/${key}/${encodeURIComponent(row[def.id])}`, { method: 'DELETE' }); say('Deleted.'); draw(); } catch (x) { say(x.message, 'err'); }
+    try { await api(`/${key}/${encodeURIComponent(row[def.id])}`, { method: 'DELETE' }); dirty = false; say('Deleted.'); draw(); } catch (x) { say(x.message, 'err'); draw(); }
   };
 }
 
+let settingsTab = 0;
 async function settings() {
   const current = newScreen();
   const [s, mail] = await Promise.all([api('/settings'), api('/email')]);
   if (!current()) return;
-  shell(`<h1>Site settings</h1>
-   <div class="card"><h2>Email</h2>${mail.enabled
-    ? `<p>Email is set up${mail.mode === 'gateway' ? ' (through GoDaddy\'s email service)' : ''}: new leads are emailed to the team${s.confirm_email !== '0' ? ', and people who send a form get a confirmation' : ''}.</p><div class="bar" style="margin:0"><button class="b line" type="button" id="testmail">Send a test email to me</button><span class="hint" id="testmsg"></span></div>`
-    : '<p>Email is <strong>not set up yet</strong>, so new leads only appear in Leads and nobody is emailed. To turn it on, add the SMTP settings from your email provider to the <code>.env</code> file (see README, "Lead emails") and restart the site.</p>'}</div>
-   <div class="card"><form id="sf">${schema.settingsFields.map((f) => input(f, f.t === 'checkbox' ? s[f.n] === '1' : s[f.n])).join('')}
-   <div class="bar" style="margin-top:18px"><button class="b" type="submit">Save settings</button></div></form></div>`);
+  const groups = [];
+  for (const f of schema.settingsFields) { if (f.t === 'heading') groups.push({ h: f, fields: [] }); else if (groups.length) groups[groups.length - 1].fields.push(f); }
+  if (settingsTab >= groups.length) settingsTab = 0;
+  const emailCard = `<div class="callout ${mail.enabled ? 'ok' : 'warn'}"><div><b>${mail.enabled ? 'Email is working' : 'Email is not set up'}</b>
+    <p>${mail.enabled ? `New leads are emailed to the team${mail.mode === 'gateway' ? ' through GoDaddy\'s email service' : ''}${s.confirm_email !== '0' ? ', and people who send a form get a confirmation' : ''}.` : 'New leads only appear in Leads; nobody is emailed. On GoDaddy this works automatically; on your own computer add the SMTP settings to .env.'}</p></div>
+    ${mail.enabled ? '<div class="callout-a"><button class="b ghost sm" type="button" id="testmail">Send a test email to me</button><span class="hint" id="testmsg" role="status"></span></div>' : ''}</div>`;
+  shell(`<div class="settings">
+    <nav class="stabs" role="tablist" aria-label="Settings sections">${groups.map((g, i) => `<button type="button" role="tab" id="st${i}" aria-controls="sp${i}" aria-selected="${i === settingsTab}" data-stab="${i}">${esc(g.h.l)}</button>`).join('')}</nav>
+    <form id="sf" class="card form">${groups.map((g, i) => `<section id="sp${i}" role="tabpanel" aria-labelledby="st${i}"${i === settingsTab ? '' : ' hidden'}>
+      <div class="sec-intro"><h2>${esc(g.h.l)}</h2>${g.h.hint ? `<p>${esc(g.h.hint)}</p>` : ''}</div>
+      ${/email/i.test(g.h.l) ? emailCard : ''}${g.fields.map((f) => input(f, f.t === 'checkbox' ? s[f.n] === '1' : s[f.n])).join('')}</section>`).join('')}
+      <div class="savebar"><span class="state">All changes saved</span><button class="b" type="submit">Save changes</button></div></form></div>`,
+  { title: 'Site settings', sub: 'Changes show on the website as soon as you save.' });
+  root.querySelectorAll('[data-stab]').forEach((b) => (b.onclick = () => {
+    settingsTab = Number(b.dataset.stab);
+    root.querySelectorAll('[data-stab]').forEach((x) => x.setAttribute('aria-selected', String(x === b)));
+    root.querySelectorAll('[role=tabpanel]').forEach((p, i) => { p.hidden = i !== settingsTab; });
+  }));
   root.querySelectorAll('.img-field').forEach((box) => imageField(box, $('#sf')));
   mountLists(schema.settingsFields);
   mountRanges($('#sf'));
+  trackChanges($('#sf'));
   if ($('#testmail')) $('#testmail').onclick = async () => {
     $('#testmsg').textContent = 'Sending...';
     try { const r = await api('/email/test', { method: 'POST' }); $('#testmsg').textContent = `Sent to ${r.to}. Check that inbox (and spam).`; }
@@ -477,10 +734,11 @@ async function settings() {
   };
   $('#sf').onsubmit = async (ev) => {
     ev.preventDefault();
-    try { await api('/settings', { method: 'PUT', body: collect(ev.target, { fields: schema.settingsFields }) }); say('Settings saved. Changes are live within a minute.'); settings(); }
-    catch (x) { say(x.message, 'err'); settings(); }
+    try { await api('/settings', { method: 'PUT', body: collect(ev.target, { fields: schema.settingsFields }) }); dirty = false; say('Settings saved. The website shows the changes now.'); settings(); }
+    catch (x) { say(x.message, 'err'); dirty = false; settings(); }
   };
 }
+
 const kb = (n) => (n > 1048576 ? (n / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round(n / 1024)) + ' KB');
 function suggestPassword() {
   const abc = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789';
@@ -490,37 +748,55 @@ async function users() {
   const current = newScreen();
   const [u, act, bk] = await Promise.all([api('/users'), api('/activity'), api('/backup')]);
   if (!current()) return;
-  shell(`<h1>Admin users</h1>
-   <div class="card"><h2>Logins</h2>
-    <p class="hint" style="margin-bottom:12px">Give each team member their own login, so you can see who changed what and remove someone's access when they leave.</p>
-    <div class="tw"><table><thead><tr><th>Email</th><th>Added</th><th>Last sign-in</th><th></th></tr></thead><tbody>
-    ${u.users.map((x) => `<tr><td>${esc(x.email)}${x.id === u.me ? ' <span class="pill">you</span>' : ''}</td><td>${esc(when(x.created_at))}</td><td>${esc(when(x.last_login))}</td>
-     <td>${x.id === u.me ? '' : `<button class="b red" data-rmuser="${x.id}" data-email="${esc(x.email)}">Remove</button>`}</td></tr>`).join('')}
+  const off = u.users.filter((x) => !x.totp_on).length;
+  shell(`<section class="card"><div class="card-h"><h2>Logins</h2><span class="muted sm">${u.users.length === 1 ? '1 person' : u.users.length + ' people'}${off ? ` · ${off} without two-step sign-in` : ''}</span></div>
+    <div class="tw"><table class="tbl"><thead><tr><th>Person</th><th>Role</th><th>Two-step sign-in</th><th>Last sign-in</th><th></th></tr></thead><tbody>
+    ${u.users.map((x) => `<tr><td><div class="who"><span class="av sm">${esc(initials(x.name || x.email))}</span><div><b>${esc(x.name || x.email)}</b>${x.id === u.me ? ' <span class="badge">you</span>' : ''}${x.name ? `<br><span class="muted sm">${esc(x.email)}</span>` : ''}</div></div></td>
+     <td>${x.id === u.me ? `<span class="badge">${x.role === 'staff' ? 'Staff' : 'Admin'}</span>` : `<select data-role="${x.id}" aria-label="Role for ${esc(x.email)}"><option value="admin"${x.role !== 'staff' ? ' selected' : ''}>Admin</option><option value="staff"${x.role === 'staff' ? ' selected' : ''}>Staff</option></select>`}</td>
+     <td>${x.totp_on ? `<span class="badge st-enrolled">On</span>${x.id === u.me ? '' : ` <button class="b ghost sm" data-reset2fa="${x.id}" data-email="${esc(x.email)}">Reset</button>`}` : '<span class="badge due-today">Off</span>'}</td>
+     <td class="nowrap">${esc(when(x.last_login))}</td>
+     <td class="row-end">${x.id === u.me ? '' : `<button class="b ghost sm danger" data-rmuser="${x.id}" data-email="${esc(x.email)}">Remove</button>`}</td></tr>`).join('')}
     </tbody></table></div>
-    <h3 style="margin-top:18px">Add a login</h3>
-    <form id="uf"><div class="row2"><div><label for="ue">Email</label><input id="ue" type="email" required autocomplete="off"></div>
-     <div><label for="up">Temporary password (12+ characters)</label><input id="up" type="text" minlength="12" required autocomplete="off" spellcheck="false"></div></div>
-     <div class="bar" style="margin-top:12px"><button class="b" type="submit">Add login</button><button class="b line" type="button" id="gen">Suggest a password</button></div></form>
-    <p class="hint">Send the person their email and temporary password privately (not in the same message), and ask them to change it in Account after signing in.</p></div>
+    <details class="help"><summary>What can each role do?</summary><p><b>Admin:</b> everything, including site settings, content, referral commissions, logins and backups. <b>Staff:</b> the Dashboard and Leads only (status, assigning, follow-ups, notes, contact). Staff cannot delete leads or see commissions.</p>
+    <p><b>Reset</b> turns off someone's two-step sign-in, for example when they get a new phone. They can sign in with just their password and turn it on again in My account.</p></details></section>
 
-   <div class="card"><h2>Backups</h2>
-    ${bk.mode === 'sqlite' ? `<p class="hint" style="margin-bottom:12px">A copy of everything (leads, programs, settings) is saved automatically once a day, and the latest ${bk.keep} are kept, together with a copy of every uploaded photo. They are stored on the same computer as the site, so also download one now and then and keep it somewhere safe.</p>
-    <div class="bar"><a class="b" href="/admin/api/backup/download">Download a backup now</a><button class="b line" type="button" id="bknow">Make today's backup now</button><span class="hint" id="bkmsg"></span></div>
-    ${bk.backups.length ? `<div class="tw"><table><thead><tr><th>Automatic backup</th><th>Size</th></tr></thead><tbody>${bk.backups.map((b) => `<tr><td>${esc(b.name)}</td><td>${kb(b.size)}</td></tr>`).join('')}</tbody></table></div>` : '<p class="hint">No automatic backups yet. The first one is made a minute after the site starts.</p>'}`
-    : `<p class="hint" style="margin-bottom:12px">"Download a backup now" saves a file with everything (leads, programs, partners, settings) to your computer. Do it regularly, for example every week, and keep the files somewhere safe such as Google Drive. Photos are not in it; keep your own copies of the logo and team photos.</p>
-    <div class="bar"><a class="b" href="/admin/api/backup/download">Download a backup now</a></div>`}</div>
+   <section class="card"><h2>Add a login</h2>
+    <form id="uf" class="g2">
+     <div><label for="un">Name</label><input id="un" autocomplete="off" placeholder="e.g. Kevin Osei-Sarfo"></div>
+     <div><label for="ue">Email</label><input id="ue" type="email" required autocomplete="off"></div>
+     <div><label for="ur">Role</label><select id="ur"><option value="staff">Staff (leads only)</option><option value="admin">Admin (everything)</option></select></div>
+     <div><label for="up">Temporary password (12+ characters)</label><div class="inline-row"><input id="up" type="text" minlength="12" required autocomplete="off" spellcheck="false"><button class="b ghost" type="button" id="gen">Suggest</button></div></div>
+     <div class="span2 row-end"><button class="b" type="submit">Add login</button></div></form>
+    <p class="hint">Send the email and the temporary password separately (not in the same message). They should change it in My account after signing in, and turn on two-step sign-in.</p></section>
 
-   <div class="card"><h2>Recent activity</h2>
-    ${act.length ? `<div class="tw"><table><thead><tr><th>When</th><th>Who</th><th>What</th></tr></thead><tbody>${act.map((a) => `<tr><td style="white-space:nowrap">${esc(when(a.created_at))}</td><td>${esc(a.user_email)}</td><td>${esc(a.action)}</td></tr>`).join('')}</tbody></table></div>` : '<p class="hint">Nothing yet.</p>'}</div>`);
+   <section class="card"><h2>Backups</h2>
+    ${bk.mode === 'sqlite' ? `<p class="hint">A copy of everything (leads, programs, settings) is saved automatically once a day, and the latest ${bk.keep} are kept, with a copy of every uploaded photo. They are stored on the same computer as the site, so also download one now and then and keep it somewhere safe.</p>
+    <div class="bar"><a class="b" href="/admin/api/backup/download">${icon('download')}Download a backup now</a><button class="b ghost" type="button" id="bknow">Make today's backup now</button><span class="hint" id="bkmsg"></span></div>
+    ${bk.backups.length ? `<div class="tw"><table class="tbl"><thead><tr><th>Automatic backup</th><th>Size</th></tr></thead><tbody>${bk.backups.map((b) => `<tr><td>${esc(b.name)}</td><td>${kb(b.size)}</td></tr>`).join('')}</tbody></table></div>` : '<p class="hint">No automatic backups yet. The first one is made a minute after the site starts.</p>'}`
+    : `<p class="hint">"Download a backup now" saves a file with everything (leads, programs, partners, settings) to your computer. Do it regularly, for example every week, and keep the files somewhere safe such as Google Drive. Photos are not in it; keep your own copies of the logo and team photos.</p>
+    <div class="bar"><a class="b" href="/admin/api/backup/download">${icon('download')}Download a backup now</a></div>`}</section>
+
+   <section class="card"><div class="card-h"><h2>Recent activity</h2><span class="muted sm">Who changed what</span></div>
+    ${act.length ? `<div class="tw scroll"><table class="tbl"><thead><tr><th>When</th><th>Who</th><th>What</th></tr></thead><tbody>${act.map((a) => `<tr><td class="nowrap">${esc(when(a.created_at))}</td><td>${esc(a.user_email)}</td><td>${esc(a.action)}</td></tr>`).join('')}</tbody></table></div>` : '<p class="hint">Nothing yet.</p>'}</section>`,
+  { title: 'Team & security', sub: 'Logins, roles, two-step sign-in, backups and the activity log.' });
   $('#gen').onclick = () => { $('#up').value = suggestPassword(); };
   $('#uf').onsubmit = async (ev) => {
     ev.preventDefault();
-    try { await api('/users', { method: 'POST', body: { email: $('#ue').value, password: $('#up').value } }); say(`Login added for ${$('#ue').value}.`); users(); }
+    try { await api('/users', { method: 'POST', body: { name: $('#un').value, email: $('#ue').value, role: $('#ur').value, password: $('#up').value } }); assignees = null; say(`Login added for ${$('#ue').value}.`); users(); }
     catch (x) { say(x.message, 'err'); users(); }
   };
+  root.querySelectorAll('[data-role]').forEach((s) => (s.onchange = async () => {
+    try { await api('/users/' + s.dataset.role, { method: 'PATCH', body: { role: s.value } }); say(`Role changed to ${s.value}.`); } catch (x) { say(x.message, 'err'); }
+    users();
+  }));
+  root.querySelectorAll('[data-reset2fa]').forEach((b) => (b.onclick = async () => {
+    if (!confirm(`Turn off two-step sign-in for ${b.dataset.email}? They can then sign in with just their password.`)) return;
+    try { await api('/users/' + b.dataset.reset2fa, { method: 'PATCH', body: { reset2fa: true } }); say('Two-step sign-in turned off for ' + b.dataset.email + '.'); } catch (x) { say(x.message, 'err'); }
+    users();
+  }));
   root.querySelectorAll('[data-rmuser]').forEach((b) => (b.onclick = async () => {
-    if (!confirm(`Remove the login for ${b.dataset.email}? They will be signed out and can no longer use the admin panel.`)) return;
-    try { await api('/users/' + b.dataset.rmuser, { method: 'DELETE' }); say('Login removed.'); users(); } catch (x) { say(x.message, 'err'); users(); }
+    if (!confirm(`Remove the login for ${b.dataset.email}? They will be signed out and their leads become unassigned.`)) return;
+    try { await api('/users/' + b.dataset.rmuser, { method: 'DELETE' }); assignees = null; say('Login removed.'); users(); } catch (x) { say(x.message, 'err'); users(); }
   }));
   if ($('#bknow')) $('#bknow').onclick = async () => {
     $('#bkmsg').textContent = 'Working...';
@@ -529,18 +805,63 @@ async function users() {
   };
 }
 
-function account() {
-  newScreen();
-  shell(`<h1>Account</h1><div class="card"><h2>Change password</h2><form id="pf">
-   <label for="cp">Current password</label><input id="cp" type="password" autocomplete="current-password" required>
-   <label for="np">New password (12+ characters)</label><input id="np" type="password" autocomplete="new-password" minlength="12" required>
-   <div class="bar" style="margin-top:18px"><button class="b" type="submit">Change password</button></div></form></div>`);
+async function account() {
+  const current = newScreen();
+  const a = await api('/account');
+  if (!current()) return;
+  shell(`<div class="narrow"><section class="card"><h2>Profile</h2><form id="af" class="g2">
+     <div><label for="an">Your name</label><input id="an" value="${esc(a.name)}" placeholder="Shown to your team and on leads you handle"></div>
+     <div><label for="aem">Email</label><input id="aem" value="${esc(a.email)}" disabled><p class="hint">You sign in with this. An admin can change it by adding a new login.</p></div>
+     <div class="span2"><label class="check"><input type="checkbox" id="adg"${a.digest ? ' checked' : ''}> Daily follow-up email</label><p class="hint">Each morning: the follow-ups due on leads assigned to you, and new leads nobody has picked up yet. Only sent when there is something to do.</p></div>
+     <div class="span2 row-end"><button class="b" type="submit">Save profile</button></div></form></section>
+
+   <section class="card" id="tfa"><div class="card-h"><h2>Two-step sign-in</h2>${a.totp_on ? '<span class="badge st-enrolled">On</span>' : '<span class="badge due-today">Off</span>'}</div>
+    ${a.totp_on
+      ? `<p>When you sign in, you type your password and then a 6-digit code from your authenticator app. If you get a new phone, turn it off here first and set it up again (or ask an admin to reset it).</p>
+         <form id="tfaoff" class="inline-row narrow"><input type="password" id="tfapw" placeholder="Your password" autocomplete="current-password" required aria-label="Your password"><button class="b ghost danger" type="submit">Turn off</button></form>`
+      : `<p>Adds a second step when you sign in: a 6-digit code from a free app on your phone (Google Authenticator, Microsoft Authenticator or Authy). Someone who learns your password still cannot get in.</p>
+         <button class="b" type="button" id="tfastart">${icon('shield')}Turn on two-step sign-in</button><div id="tfasetup"></div>`}</section>
+
+   <section class="card"><h2>Change password</h2><form id="pf" class="g2">
+     <div><label for="cp">Current password</label><input id="cp" type="password" autocomplete="current-password" required></div>
+     <div><label for="np">New password (12+ characters)</label><input id="np" type="password" autocomplete="new-password" minlength="12" required></div>
+     <div class="span2 row-end"><button class="b" type="submit">Change password</button></div></form>
+     <p class="hint">Changing it signs you out on your other devices.</p></section></div>`,
+  { title: 'My account', sub: esc(a.email) });
+  $('#af').onsubmit = async (ev) => {
+    ev.preventDefault();
+    try { await api('/account', { method: 'POST', body: { name: $('#an').value, digest: $('#adg').checked } }); schema.user.name = $('#an').value.trim(); assignees = null; say('Profile saved.'); account(); }
+    catch (x) { say(x.message, 'err'); account(); }
+  };
   $('#pf').onsubmit = async (ev) => {
     ev.preventDefault();
     try { await api('/password', { method: 'POST', body: { current: $('#cp').value, next: $('#np').value } }); say('Password changed.'); account(); }
     catch (x) { say(x.message, 'err'); account(); }
   };
+  if ($('#tfastart')) $('#tfastart').onclick = async () => {
+    try {
+      const r = await api('/2fa/setup', { method: 'POST' });
+      $('#tfastart').hidden = true;
+      $('#tfasetup').innerHTML = `<ol class="steps-ol">
+        <li><b>Install an authenticator app</b> on your phone if you do not have one: Google Authenticator, Microsoft Authenticator or Authy (all free).</li>
+        <li><b>Scan this code</b> with the app (tap + or "Add account").<div class="qr"><img src="${esc(r.qr)}" alt="QR code for two-step sign-in" width="180" height="180"><div><p class="hint">Cannot scan? Choose "Enter a setup key" in the app and type:</p><code class="secret">${esc(r.secret)}</code></div></div></li>
+        <li><b>Type the 6-digit code</b> the app now shows for UGEC Canada:
+          <form id="tfaon" class="inline-row narrow"><input id="tfacode" inputmode="numeric" autocomplete="one-time-code" maxlength="7" placeholder="123456" required aria-label="6-digit code"><button class="b" type="submit">Turn on</button></form></li></ol>`;
+      $('#tfacode').focus();
+      $('#tfaon').onsubmit = async (ev) => {
+        ev.preventDefault();
+        try { await api('/2fa/enable', { method: 'POST', body: { code: $('#tfacode').value } }); schema.user.totp_on = true; say('Two-step sign-in is on. Next time you sign in, have your phone ready.'); account(); }
+        catch (x) { alert(x.message); $('#tfacode').select(); }
+      };
+    } catch (x) { say(x.message, 'err'); account(); }
+  };
+  if ($('#tfaoff')) $('#tfaoff').onsubmit = async (ev) => {
+    ev.preventDefault();
+    if (!confirm('Turn off two-step sign-in? Your login will be protected by your password only.')) return;
+    try { await api('/2fa/disable', { method: 'POST', body: { password: $('#tfapw').value } }); schema.user.totp_on = false; say('Two-step sign-in is off.'); account(); }
+    catch (x) { say(x.message, 'err'); account(); }
+  };
 }
 
-(async () => { try { me = await api('/me'); await boot(); } catch { login(); } })();
+(async () => { try { await boot(); } catch { login(); } })();
 })();

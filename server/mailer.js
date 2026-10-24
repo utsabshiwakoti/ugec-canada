@@ -51,6 +51,20 @@ async function notifyLead({ to, title, lines, replyTo }) {
   await send({ to, replyTo, subject: `New website lead: ${title}`, text: lines.join('\n') });
 }
 
+async function sendDigest({ to, name, due, fresh, today, adminUrl }) {
+  if (!enabled() || !to) return;
+  const who = (l) => `${l.name || l.email || 'Lead #' + l.id} (${l.form_type})`;
+  const text = [
+    `Good morning${name ? ' ' + name.split(/\s+/)[0] : ''},`, '',
+    due.length ? `Follow-ups due (${due.length}):` : 'No follow-ups due for your leads today.',
+    ...due.map((l) => `  - ${who(l)}${l.follow_up < today ? ` - overdue since ${l.follow_up}` : ''}`),
+    ...(fresh.length ? ['', `New leads nobody has picked up yet (${fresh.length}):`, ...fresh.slice(0, 20).map((l) => `  - ${who(l)}, received ${l.created_at.slice(0, 10)}`)] : []),
+    '', adminUrl ? `Open the admin panel: ${adminUrl}` : 'Open the admin panel to follow up.',
+    '', 'To stop these emails, untick "Daily follow-up email" in Admin > My account.',
+  ].join('\n');
+  await send({ to, subject: `${due.length ? `${due.length} follow-up${due.length === 1 ? '' : 's'} due` : 'New leads waiting'} | UGEC admin`, text });
+}
+
 async function confirmLead({ to, name, title, settings }) {
   if (!enabled() || !to) return;
   const first = String(name || '').trim().split(/\s+/)[0];
@@ -85,4 +99,4 @@ async function sendTest(to) {
   catch (e) { console.error('[mail]', e.message); throw new Error('The test email could not be sent. Check the email settings (the server log has the details).'); }
 }
 
-module.exports = { notifyLead, confirmLead, sendPartnerLink, sendTest, enabled, mode };
+module.exports = { notifyLead, confirmLead, sendPartnerLink, sendDigest, sendTest, enabled, mode };

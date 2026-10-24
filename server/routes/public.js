@@ -66,7 +66,11 @@ router.post('/leads/:type', leadLimiter, async (req, res) => {
     row.form_type, row.name, row.email, row.phone, row.program, row.data, row.referral_partner_id, row.referral_method, row.referral_other, db.now());
   const settings = await db.getSettings();
   const to = form.notify_email || process.env.NOTIFY_EMAIL || settings.contact_email;
-  notifyLead({ to, title: form.title, replyTo: row.email, lines: [`Form: ${form.title}`, ...(partner ? [`Referred by: ${partner.name} (${partner.code}, ${method})`] : other ? [`Referred by (typed): ${other}`] : []), ...fields.filter((f) => clean[f.n]).map((f) => `${f.l}: ${clean[f.n]}`)] })
+  const digits = row.phone.replace(/\D/g, '').slice(-10);
+  const before = await db.all("SELECT id, created_at FROM leads WHERE id <> ? AND ((? <> '' AND lower(email) = lower(?)) OR (? <> '' AND phone LIKE ?)) ORDER BY id DESC LIMIT 3",
+    info.id, row.email, row.email, digits.length >= 7 ? digits : '', `%${digits.slice(-7)}%`);
+  const repeat = before.length ? [`Note: this person contacted UGEC before (lead${before.length > 1 ? 's' : ''} ${before.map((b) => `#${b.id} on ${b.created_at.slice(0, 10)}`).join(', ')}).`] : [];
+  notifyLead({ to, title: form.title, replyTo: row.email, lines: [`Form: ${form.title}`, ...repeat, ...(partner ? [`Referred by: ${partner.name} (${partner.code}, ${method})`] : other ? [`Referred by (typed): ${other}`] : []), ...fields.filter((f) => clean[f.n]).map((f) => `${f.l}: ${clean[f.n]}`)] })
     .catch((e) => console.error('[mail]', e.message));
   if (row.email && settings.confirm_email !== '0') {
     confirmLead({ to: row.email, name: row.name, title: form.title, settings }).catch((e) => console.error('[mail]', e.message));
