@@ -17,6 +17,7 @@ const settings = {
   rcic_licence: '',
   announcement_active: '1',
   announcement: 'Intakes and availability change often. Message us on WhatsApp for current dates.',
+  logo_box: '0',
   hero_image: '',
   about_image: '',
   testimonials: '[]',

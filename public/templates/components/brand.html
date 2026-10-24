@@ -2,7 +2,7 @@
   {{#if logo}}
   <picture>
     {{#if dark}}<source srcset="{{dark}}" media="(prefers-color-scheme: dark)">{{/if}}
-    <img class="brand-logo{{#unless dark}}{{#unless badge}} needs-light{{/unless}}{{/unless}}" src="{{logo}}" alt="">
+    <img class="brand-logo{{#if box}}{{#unless dark}}{{#unless badge}} needs-light{{/unless}}{{/unless}}{{/if}}" src="{{logo}}" alt="">
   </picture>
   {{else}}
   <span class="mark" aria-hidden="true"><i></i><b></b><i></i></span><span>UGEC<small>Canada</small></span>

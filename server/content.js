@@ -12,7 +12,7 @@ async function site() {
       stripeUrl: s.stripe_url, rcic: { name: s.rcic_name, title: s.rcic_title, licence: s.rcic_licence },
       announcement: s.announcement_active === '1' ? s.announcement : '',
       categoryInfo: parse(s.category_info, {}),
-      heroImage: s.hero_image || '', aboutImage: s.about_image || '', logo: s.logo || '', logoDark: s.logo_dark || '',
+      heroImage: s.hero_image || '', aboutImage: s.about_image || '', logo: s.logo || '', logoDark: s.logo_dark || '', logoBox: s.logo_box === '1',
       logoHeight: Math.min(96, Math.max(28, Number(s.logo_height) || 44)),
       faq: parse(s.faq, []), testimonials: parse(s.testimonials, []),
       social: [['Facebook', s.facebook_url], ['Instagram', s.instagram_url], ['TikTok', s.tiktok_url]].filter(([, href]) => href).map(([label, href]) => ({ label, href })),

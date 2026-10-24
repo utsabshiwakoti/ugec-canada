@@ -8,7 +8,7 @@ export function shellParts(path) {
   const cur = path.startsWith('/programs/') ? '/pr-leading-courses' : path.startsWith('/blog/') ? '/blog' : path;
   const link = ([href, label]) => ({ href, label, current: href === cur });
   return {
-    brand: t('components/brand', { logo: c.logo, badge: false, height: c.logoHeight, dark: c.logoDark }),
+    brand: t('components/brand', { logo: c.logo, badge: false, box: c.logoBox, height: c.logoHeight, dark: c.logoDark }),
     banner: c.announcement && !S.bannerOff ? t('components/banner', { text: c.announcement }) : '',
     nav: t('components/nav', {
       links: NAV.map(([a, b]) => (Array.isArray(b) ? { label: a, children: b.map(link), current: b.some(([href]) => href === cur) } : link([a, b]))),
