@@ -23,12 +23,26 @@ async function send({ to, subject, text, replyTo }) {
   }
   const body = { to: [].concat(to), subject, text };
   if (replyTo) body.replyTo = replyTo;
-  if (process.env.MAIL_FROM) body.from = process.env.MAIL_FROM;
+  const from = process.env.MAIL_FROM || defaultFrom();
+  try {
+    await gateway(from ? { ...body, from } : body);
+  } catch (e) {
+    if (!from || e.unreachable) throw e;
+    console.warn(`[mail] the email service refused the sender "${from}" (${e.message}); sending with its default sender instead`);
+    await gateway(body);
+  }
+}
+function defaultFrom() {
+  let host = '';
+  try { host = new URL(process.env.SITE_URL || '').hostname.replace(/^www\./, ''); } catch { return ''; }
+  return host.includes('.') && !/localhost|preview|airoapp/.test(host) ? `UGEC Canada <no-reply@${host}>` : '';
+}
+async function gateway(body) {
   let res, out;
   try {
     res = await fetch(GATEWAY, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body), signal: AbortSignal.timeout(30000) });
     out = await res.json().catch(() => ({ success: false, error: `HTTP ${res.status}` }));
-  } catch (e) { throw new Error(`email service unreachable: ${e.message}`); }
+  } catch (e) { throw Object.assign(new Error(`email service unreachable: ${e.message}`), { unreachable: true }); }
   if (!res.ok || !out.success) throw new Error(`email not sent: ${out.error || `HTTP ${res.status}`}`); // logged only, never shown to visitors
 }
 
