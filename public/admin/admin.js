@@ -13,18 +13,127 @@ async function api(path, opt = {}) {
   if (!r.ok) throw new Error(j.error || 'Request failed');
   return j;
 }
-async function prepareImage(file, { crop = '', max = 1600, format = 'jpeg' } = {}) {
-  let bmp;
-  try { bmp = await createImageBitmap(file); } catch { throw new Error('Could not read that image. Please use a JPG, PNG or WebP file.'); }
-  let sx = 0, sy = 0, sw = bmp.width, sh = bmp.height;
-  if (crop === 'square') { const s = Math.min(sw, sh); sx = (sw - s) / 2; sy = (sh - s) * 0.3; sw = sh = s; }
-  const k = Math.min(1, max / Math.max(sw, sh));
-  const c = document.createElement('canvas'); c.width = Math.round(sw * k); c.height = Math.round(sh * k);
-  const g = c.getContext('2d');
-  if (format !== 'png') { g.fillStyle = '#fff'; g.fillRect(0, 0, c.width, c.height); } // JPEG has no transparency
-  g.drawImage(bmp, sx, sy, sw, sh, 0, 0, c.width, c.height);
-  if (bmp.close) bmp.close();
-  return new Promise((ok, fail) => c.toBlob((b) => (b ? ok(b) : fail(new Error('Could not process that image.'))), format === 'png' ? 'image/png' : 'image/jpeg', 0.88));
+const SHAPES = {
+  free: { label: 'Original shape', ratio: null }, square: { label: 'Square', ratio: 1 }, circle: { label: 'Circle', ratio: 1, round: true },
+  wide: { label: 'Wide', ratio: 3 }, landscape: { label: 'Landscape', ratio: 4 / 3 }, portrait: { label: 'Portrait', ratio: 3 / 4 },
+  share: { label: 'Link preview', ratio: 1200 / 630 },
+};
+function cropImage(src, { shapes = ['free'], max = 1600, format = 'jpeg' } = {}) {
+  const png = format === 'png';
+  let img = src, shape = SHAPES[shapes[0]] ? shapes[0] : 'free';
+  let f = null, s = 1, ix = 0, iy = 0, cover = 1, minS = 1, maxS = 1, W = 0, H = 0;
+  const dlg = document.createElement('dialog');
+  dlg.className = 'crop';
+  dlg.innerHTML = `<h2>Adjust the photo</h2>
+    ${shapes.length > 1 ? `<div class="crop-shapes" role="radiogroup" aria-label="Shape">${shapes.map((k) => `<button type="button" role="radio" aria-checked="${k === shape}" data-shape="${k}">${esc(SHAPES[k].label)}</button>`).join('')}</div>` : ''}
+    <canvas class="crop-stage" tabindex="0" aria-label="Photo. Drag or use the arrow keys to move it, and + or - to zoom."></canvas>
+    <div class="crop-tools"><label for="crop-zoom">Zoom</label><input type="range" id="crop-zoom" min="0" max="1000" value="0">
+      <button type="button" class="b line" data-rot>Rotate</button><button type="button" class="b line" data-reset>Reset</button></div>
+    <p class="hint">Drag the photo to move it. Zoom with the slider, the mouse wheel or two fingers.${png ? ' Zoom out to leave space around a logo.' : ''}</p>
+    <div class="bar"><button type="button" class="b" data-ok>Use this photo</button><button type="button" class="b line" data-cancel>Cancel</button></div>`;
+  document.body.append(dlg);
+  const cv = dlg.querySelector('canvas'), g = cv.getContext('2d'), zoom = dlg.querySelector('#crop-zoom');
+  const iw = () => img.width, ih = () => img.height;
+  const round = () => !!SHAPES[shape].round;
+
+  const clamp = () => {
+    s = Math.min(maxS, Math.max(minS, s));
+    const axis = (pos, size, start, len) => (size >= len ? Math.min(start, Math.max(start + len - size, pos)) : Math.max(start, Math.min(start + len - size, pos)));
+    ix = axis(ix, iw() * s, f.x, f.w); iy = axis(iy, ih() * s, f.y, f.h);
+  };
+  const frame = (p) => { if (round()) p.ellipse(f.x + f.w / 2, f.y + f.h / 2, f.w / 2, f.h / 2, 0, 0, Math.PI * 2); else p.rect(f.x, f.y, f.w, f.h); };
+  const draw = () => {
+    const dpr = window.devicePixelRatio || 1;
+    g.setTransform(dpr, 0, 0, dpr, 0, 0);
+    g.fillStyle = '#1B2333'; g.fillRect(0, 0, W, H);
+    if (png) { // checkerboard where the result will be see-through
+      for (let y = 0; y < f.h; y += 10) for (let x = 0; x < f.w; x += 10) {
+        g.fillStyle = (x + y) / 10 % 2 ? '#E3E8F0' : '#fff'; g.fillRect(f.x + x, f.y + y, Math.min(10, f.w - x), Math.min(10, f.h - y));
+      }
+    } else { g.fillStyle = '#fff'; g.fillRect(f.x, f.y, f.w, f.h); }
+    g.imageSmoothingQuality = 'high';
+    g.drawImage(img, ix, iy, iw() * s, ih() * s);
+    const shade = new Path2D(); shade.rect(0, 0, W, H); frame(shade);
+    g.fillStyle = 'rgba(10,16,30,.62)'; g.fill(shade, 'evenodd');
+    const edge = new Path2D(); frame(edge);
+    g.strokeStyle = '#fff'; g.lineWidth = 2; g.stroke(edge);
+  };
+  const syncZoom = () => { zoom.value = String(Math.round(1000 * Math.log(s / minS) / Math.log(maxS / minS)) || 0); };
+  const zoomAt = (ns, cx = f.x + f.w / 2, cy = f.y + f.h / 2) => {
+    ns = Math.min(maxS, Math.max(minS, ns));
+    ix = cx - (cx - ix) * ns / s; iy = cy - (cy - iy) * ns / s; s = ns;
+    clamp(); syncZoom(); draw();
+  };
+  const fit = (keep) => {
+    const was = keep && f ? { cx: (f.x + f.w / 2 - ix) / s, cy: (f.y + f.h / 2 - iy) / s, rel: s / cover } : null;
+    W = cv.clientWidth; H = Math.max(240, Math.min(420, Math.round(W * 0.68)));
+    const dpr = window.devicePixelRatio || 1;
+    cv.style.height = H + 'px'; cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
+    const ratio = SHAPES[shape].ratio || iw() / ih(), pad = 20;
+    const fw = Math.min(W - 2 * pad, (H - 2 * pad) * ratio), fh = fw / ratio;
+    f = { x: (W - fw) / 2, y: (H - fh) / 2, w: fw, h: fh };
+    cover = Math.max(fw / iw(), fh / ih());
+    const contain = Math.min(fw / iw(), fh / ih());
+    minS = png ? contain / 2 : cover; maxS = Math.max(cover * 6, minS * 4);
+    s = Math.min(maxS, Math.max(minS, was ? was.rel * cover : png ? contain : cover));
+    ix = f.x + f.w / 2 - (was ? was.cx : iw() / 2) * s; iy = f.y + f.h / 2 - (was ? was.cy : ih() / 2) * s;
+    clamp(); syncZoom(); draw();
+  };
+  const rotate = () => {
+    const c = document.createElement('canvas'); c.width = ih(); c.height = iw();
+    const cg = c.getContext('2d'); cg.translate(c.width, 0); cg.rotate(Math.PI / 2); cg.drawImage(img, 0, 0);
+    img = c; fit(false);
+  };
+  const result = () => new Promise((ok) => {
+    const r = Math.min(max / Math.max(f.w, f.h), 1 / s), asPng = png || round();
+    const c = document.createElement('canvas'); c.width = Math.max(1, Math.round(f.w * r)); c.height = Math.max(1, Math.round(f.h * r));
+    const cg = c.getContext('2d');
+    if (!asPng) { cg.fillStyle = '#fff'; cg.fillRect(0, 0, c.width, c.height); } // JPEG has no transparency
+    if (round()) { cg.beginPath(); cg.ellipse(c.width / 2, c.height / 2, c.width / 2, c.height / 2, 0, 0, Math.PI * 2); cg.clip(); }
+    cg.imageSmoothingQuality = 'high';
+    cg.drawImage(img, (ix - f.x) * r, (iy - f.y) * r, iw() * s * r, ih() * s * r);
+    c.toBlob(ok, asPng ? 'image/png' : 'image/jpeg', 0.9);
+  });
+
+  const pts = new Map();
+  let pinch = null;
+  cv.addEventListener('pointerdown', (e) => { cv.setPointerCapture(e.pointerId); pts.set(e.pointerId, [e.offsetX, e.offsetY]); pinch = null; });
+  cv.addEventListener('pointermove', (e) => {
+    const last = pts.get(e.pointerId); if (!last) return;
+    pts.set(e.pointerId, [e.offsetX, e.offsetY]);
+    if (pts.size === 1) { ix += e.offsetX - last[0]; iy += e.offsetY - last[1]; clamp(); draw(); return; }
+    const [a, b] = [...pts.values()], d = Math.hypot(a[0] - b[0], a[1] - b[1]);
+    if (pinch) zoomAt(s * d / pinch, (a[0] + b[0]) / 2, (a[1] + b[1]) / 2);
+    pinch = d;
+  });
+  const up = (e) => { pts.delete(e.pointerId); pinch = null; };
+  cv.addEventListener('pointerup', up); cv.addEventListener('pointercancel', up);
+  cv.addEventListener('wheel', (e) => { e.preventDefault(); zoomAt(s * Math.exp(-e.deltaY * 0.0015), e.offsetX, e.offsetY); }, { passive: false });
+  cv.addEventListener('keydown', (e) => {
+    const mv = { ArrowLeft: [-10, 0], ArrowRight: [10, 0], ArrowUp: [0, -10], ArrowDown: [0, 10] }[e.key];
+    if (mv) { e.preventDefault(); ix += mv[0]; iy += mv[1]; clamp(); draw(); }
+    else if (e.key === '+' || e.key === '=') zoomAt(s * 1.1); else if (e.key === '-') zoomAt(s / 1.1);
+  });
+  zoom.addEventListener('input', () => zoomAt(minS * (maxS / minS) ** (zoom.value / 1000)));
+  dlg.querySelectorAll('[data-shape]').forEach((b) => b.addEventListener('click', () => {
+    shape = b.dataset.shape;
+    dlg.querySelectorAll('[data-shape]').forEach((x) => x.setAttribute('aria-checked', String(x === b)));
+    fit(true);
+  }));
+  dlg.querySelector('[data-rot]').onclick = rotate;
+  dlg.querySelector('[data-reset]').onclick = () => { img = src; fit(false); };
+  const onResize = () => fit(true);
+  window.addEventListener('resize', onResize);
+
+  return new Promise((done) => {
+    const finish = (blob) => { window.removeEventListener('resize', onResize); dlg.close(); dlg.remove(); if (src.close) src.close(); done(blob); };
+    dlg.querySelector('[data-ok]').onclick = async () => finish(await result());
+    dlg.querySelector('[data-cancel]').onclick = () => finish(null);
+    dlg.addEventListener('cancel', (e) => { e.preventDefault(); finish(null); }); // Escape key
+    dlg.showModal();
+    fit(false);
+    cv.focus();
+  });
 }
 async function uploadPhoto(folder, blob) {
   const r = await fetch('/admin/api/uploads/' + folder, { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': blob.type, 'X-Requested-With': 'ugec' }, body: blob });
@@ -36,20 +145,29 @@ async function uploadPhoto(folder, blob) {
 function imageField(box, form) {
   const hidden = box.querySelector('input[type=hidden]'), file = box.querySelector('input[type=file]');
   const prev = box.querySelector('.img-prev'), clear = box.querySelector('[data-clear]'), note = box.querySelector('.hint');
-  const pick = box.querySelector('[data-pick]');
-  const show = (url) => { prev.innerHTML = url ? `<img src="${esc(url)}" alt="">` : '<span>None</span>'; clear.hidden = !url; pick.textContent = url ? 'Change' : 'Upload'; };
+  const pick = box.querySelector('[data-pick]'), adjust = box.querySelector('[data-adjust]'), help = note.textContent;
+  const show = (url) => { prev.innerHTML = url ? `<img src="${esc(url)}" alt="">` : '<span>None</span>'; clear.hidden = adjust.hidden = !url; pick.textContent = url ? 'Change' : 'Upload'; };
   pick.onclick = () => file.click();
   const changed = () => hidden.dispatchEvent(new Event('change', { bubbles: true })); // lets previews follow along
   clear.onclick = () => { hidden.value = ''; show(''); changed(); note.textContent = 'Removed. Click Save to apply.'; };
-  file.onchange = async () => {
-    const f = file.files[0]; if (!f) return;
+  const opts = { shapes: (box.dataset.shapes || 'free').split(','), max: Number(box.dataset.max) || 1600, format: box.dataset.format };
+  const edit = async (load) => {
+    let src;
+    try { src = await load(); } catch { note.textContent = 'Could not read that image. Please use a JPG, PNG or WebP file.'; return; }
+    const blob = await cropImage(src, opts);
+    if (!blob) { note.textContent = help; return; }
     const save = form.querySelector('button[type=submit]');
     note.textContent = 'Uploading...'; save.disabled = true;
-    const opts = { crop: box.dataset.crop, max: Number(box.dataset.max) || 1600, format: box.dataset.format };
-    try { hidden.value = await uploadPhoto(box.dataset.folder, await prepareImage(f, opts)); show(hidden.value); changed(); note.textContent = 'Image ready. Click Save to apply.'; }
+    try { hidden.value = await uploadPhoto(box.dataset.folder, blob); show(hidden.value); changed(); note.textContent = 'Image ready. Click Save to apply.'; }
     catch (x) { note.textContent = x.message; }
-    finally { save.disabled = false; file.value = ''; }
+    finally { save.disabled = false; }
   };
+  file.onchange = () => { const f = file.files[0]; file.value = ''; if (f) edit(() => createImageBitmap(f)); };
+  adjust.onclick = () => edit(async () => {
+    const r = await fetch(hidden.value, { credentials: 'same-origin' });
+    if (!r.ok) throw new Error('Image not found');
+    return createImageBitmap(await r.blob());
+  });
 }
 let screenNo = 0;
 const newScreen = () => { const n = ++screenNo; return () => n === screenNo; };
@@ -268,11 +386,14 @@ function input(f, v, opts = {}) {
   if (f.t === 'list' || f.t === 'map') return `<div class="le" data-le="${esc(f.n)}"><label>${esc(f.l)}</label><input type="hidden" ${name} value="${esc(v)}">
     <div class="le-items"></div><button type="button" class="b line" data-le-add>+ ${esc(f.add || 'Add')}</button></div>`;
   if (f.t === 'checkbox') return `<div class="chk"><input type="checkbox" id="${id}" ${name}${v ? ' checked' : ''}><label for="${id}" style="margin:0">${esc(f.l)}</label></div>`;
-  if (f.t === 'image') return `<label>${esc(f.l)}</label><div class="img-field" data-folder="${esc(f.folder)}" data-crop="${esc(f.crop || '')}" data-max="${esc(f.max || '')}" data-format="${esc(f.format || '')}">
-    <div class="img-prev${f.crop === 'square' ? '' : ' wide'}">${v ? `<img src="${esc(v)}" alt="">` : '<span>None</span>'}</div>
+  if (f.t === 'image') {
+    const shapes = (f.shapes || ['free']).filter((k) => SHAPES[k]), square = SHAPES[shapes[0]].ratio === 1;
+    return `<label>${esc(f.l)}</label><div class="img-field" data-folder="${esc(f.folder)}" data-shapes="${esc(shapes.join(','))}" data-max="${esc(f.max || '')}" data-format="${esc(f.format || '')}">
+    <div class="img-prev${square ? '' : ' wide'}">${v ? `<img src="${esc(v)}" alt="">` : '<span>None</span>'}</div>
     <div><input type="hidden" ${name} value="${esc(v)}"><input type="file" accept="image/jpeg,image/png,image/webp" hidden aria-label="${esc(f.l)}">
-      <div class="bar" style="margin:0"><button type="button" class="b line" data-pick>${v ? 'Change' : 'Upload'}</button><button type="button" class="b line" data-clear${v ? '' : ' hidden'}>Remove</button></div>
-      <p class="hint">JPG, PNG or WebP. ${f.crop === 'square' ? 'It is cropped to a square and resized automatically.' : 'It is resized automatically.'} Click Save to apply.</p></div></div>`;
+      <div class="bar" style="margin:0"><button type="button" class="b line" data-pick>${v ? 'Change' : 'Upload'}</button><button type="button" class="b line" data-adjust${v ? '' : ' hidden'}>Adjust</button><button type="button" class="b line" data-clear${v ? '' : ' hidden'}>Remove</button></div>
+      <p class="hint">JPG, PNG or WebP. After choosing it you can move, zoom and crop it${shapes.length > 1 ? ', and pick a shape such as ' + shapes.slice(1).map((k) => SHAPES[k].label.toLowerCase()).join(' or ') : ''}. Click Save to apply.</p></div></div>`;
+  }
   let c;
   if (f.t === 'textarea') c = `<textarea id="${id}" ${name} rows="${f.rows || 4}">${esc(v)}</textarea>`;
   else if (f.t === 'json') c = `<textarea id="${id}" ${name} class="json" rows="${f.rows || 10}" spellcheck="false">${esc(v)}</textarea>`;

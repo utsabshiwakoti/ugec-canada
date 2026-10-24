@@ -79,6 +79,17 @@ button.b.line.danger{color:var(--red);border-color:#E9B6B1}
 .img-prev.wide{width:220px;height:110px;border-radius:8px;background:#fff repeating-conic-gradient(#EEF1F6 0 25%,#fff 0 50%) 0 0/16px 16px}
 .img-prev.wide img{object-fit:contain}
 .img-field .hint{margin-top:8px}
+dialog.crop{width:min(620px,calc(100vw - 24px));max-height:calc(100vh - 24px);box-sizing:border-box;border:0;border-radius:12px;padding:20px;color:var(--text);box-shadow:0 24px 60px rgba(8,20,48,.35)}
+dialog.crop::backdrop{background:rgba(10,20,40,.6)}
+.crop-shapes{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px}
+.crop-shapes button{font:inherit;font-size:.88rem;font-weight:600;padding:6px 12px;border-radius:999px;border:1.5px solid var(--line);background:#fff;color:var(--navy);cursor:pointer}
+.crop-shapes button[aria-checked="true"]{background:var(--navy);border-color:var(--navy);color:#fff}
+.crop-stage{display:block;width:100%;border-radius:8px;touch-action:none;cursor:grab;user-select:none}
+.crop-stage:active{cursor:grabbing}
+.crop-stage:focus-visible{outline:3px solid var(--red);outline-offset:2px}
+.crop-tools{display:flex;align-items:center;gap:10px;margin-top:12px}
+.crop-tools label{margin:0}
+.crop-tools input[type=range]{flex:1;padding:0;border:0;accent-color:var(--navy)}
 .thumb{display:block;width:36px;height:36px;border-radius:50%;object-fit:cover;background:var(--ice);border:1px solid var(--line)}
 
 .card.invite{border-color:#9FD3B4;background:#F2FBF5}

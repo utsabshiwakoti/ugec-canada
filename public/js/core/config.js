@@ -1,6 +1,6 @@
 export const BOOKING = [
-  { key: 'educational', label: 'Educational consultation', price: 'Free', form: 'educational', blurb: 'Discuss PR-leading courses, programs and colleges', submit: 'Book Educational Consultation' },
-  { key: 'immigration', label: 'Immigration consultation', price: 'Paid', form: 'immigration', blurb: 'With a Regulated Canadian Immigration Consultant (RCIC)', submit: 'Send intake details' },
+  { key: 'educational', label: 'Educational Consultation', price: 'Free', form: 'educational', blurb: 'Discuss PR-leading courses, programs and colleges', submit: 'Book Educational Consultation' },
+  { key: 'immigration', label: 'Immigration Consultation', price: 'Paid', form: 'immigration', blurb: 'With a Regulated Canadian Immigration Consultant (RCIC)', submit: 'Send intake details' },
 ];
 
 export const DISCLAIMER = 'UGEC Canada is an education consultancy. Program information, tuition, admission requirements, intakes and availability are subject to change and should be confirmed with the educational institution. UGEC does not guarantee admission, visas, work permits, permanent residence or employment. Regulated immigration advice, where required, is provided by an appropriately authorized professional.';
