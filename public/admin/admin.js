@@ -421,9 +421,12 @@ async function openLead(id) {
   const title = r.name || r.email || 'Lead #' + r.id, form = formTitles[r.form_type] || r.form_type;
   const first = String(r.name || '').trim().split(/\s+/)[0];
   const waText = `Hi ${first || 'there'}, this is ${u.name ? u.name.split(/\s+/)[0] + ' from ' : ''}UGEC Canada, about your request on our website (${form}).`;
+  const subject = 'Your request with UGEC Canada';
+  const body = `Hi ${first || 'there'},\n\nThank you for contacting UGEC Canada about your ${form.toLowerCase()} request.\n\n\n${u.name || 'UGEC Canada'}\nUGEC Canada`;
+  const outlook = `https://outlook.office.com/mail/deeplink/compose?${new URLSearchParams({ to: r.email || '', subject, body }).toString().replace(/\+/g, '%20')}`;
   const contact = [
     r.phone && `<a class="b wa" data-via="whatsapp" target="_blank" rel="noopener" href="https://wa.me/${waNumber(r.phone)}?text=${encodeURIComponent(waText)}">${icon('chat')}WhatsApp</a>`,
-    r.email && `<a class="b ghost" data-via="email" href="mailto:${esc(r.email)}?subject=${encodeURIComponent('Your request with UGEC Canada')}">${icon('mail')}Email</a>`,
+    r.email && `<a class="b ghost" data-via="email" target="_blank" rel="noopener" href="${esc(outlook)}" title="Opens a new message in Outlook (your UGEC mailbox)">${icon('mail')}Email</a>`,
     r.phone && `<a class="b ghost" data-via="call" href="tel:+${waNumber(r.phone)}">${icon('phone')}Call</a>`,
   ].filter(Boolean).join('');
   const opt = (v, l, cur) => `<option value="${esc(v)}"${String(cur ?? '') === String(v) ? ' selected' : ''}>${esc(l)}</option>`;
@@ -453,7 +456,7 @@ async function openLead(id) {
        <div><label for="l_cs">Commission (CAD)</label><div class="g2 tight"><select id="l_cs" name="commission_status">${schema.commissionStatuses.map((s) => opt(s, cap(s), r.commission_status)).join('')}</select>
          <input type="number" min="0" step="0.01" name="commission_amount" value="${esc(r.commission_amount)}" aria-label="Commission amount in CAD"></div></div>` : ''}
        </div><div class="row-end"><button class="b" type="submit">Save changes</button></div></form></section>
-     <section class="dsec"><h3>Details from the form</h3><dl class="kv">${Object.entries(r.data).map(([k, v]) => `<dt>${esc(k.replace(/_/g, ' '))}</dt><dd>${esc(v)}</dd>`).join('') || '<dd class="muted">No details.</dd>'}</dl></section>
+     <section class="dsec"><h3>Details from the form</h3><dl class="kv">${Object.entries(r.data).map(([k, v]) => `<dt>${esc(k.replace(/_/g, ' '))}</dt><dd>${k === 'email' ? `<a href="mailto:${esc(v)}">${esc(v)}</a>` : esc(v)}</dd>`).join('') || '<dd class="muted">No details.</dd>'}</dl></section>
      <section class="dsec"><h3>Notes & history</h3>
        <form id="nform" class="note-form"><textarea id="ntext" rows="2" placeholder="Add a note, e.g. called, left a voicemail, sent the program list"></textarea><button class="b sm" type="submit">Add note</button></form>
        <ol class="timeline">${history}</ol></section>
